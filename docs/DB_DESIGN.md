@@ -1,8 +1,8 @@
-# 個人記帳簿系統 — 資料庫設計文件
+# 資料庫設計 — 即時標記錄音系統
 
-> **版本**：v1.0  
-> **建立日期**：2026-04-29  
-> **前置文件**：[PRD.md](./PRD.md) ｜ [ARCHITECTURE.md](./ARCHITECTURE.md) ｜ [FLOWCHART.md](./FLOWCHART.md)  
+> **文件版本：** v1.0
+> **建立日期：** 2026-05-19
+> **依據文件：** [PRD.md](PRD.md)、[ARCHITECTURE.md](ARCHITECTURE.md)、[FLOWCHART.md](FLOWCHART.md)
 
 ---
 
@@ -10,159 +10,139 @@
 
 ```mermaid
 erDiagram
-    CATEGORIES {
-        int id PK
-        string name
-        string type
-        datetime created_at
+    RECORDINGS ||--o{ MARKERS : "擁有多個標記"
+    MARKER_TYPES ||--o{ MARKERS : "被多個標記引用"
+
+    RECORDINGS {
+        int id PK "主鍵，自動遞增"
+        text title "錄音標題"
+        text filepath "音訊檔案路徑"
+        int duration_sec "錄音時長（秒）"
+        text category "錄音分類"
+        text created_at "建立時間 ISO 格式"
     }
 
-    TRANSACTIONS {
-        int id PK
-        string type
-        real amount
-        int category_id FK
-        date date
-        string note
-        datetime created_at
-        datetime updated_at
+    MARKERS {
+        int id PK "主鍵，自動遞增"
+        int recording_id FK "所屬錄音 ID"
+        int type_id FK "標記種類 ID"
+        int timestamp_sec "標記時間戳（秒）"
+        text note "備註（可為空）"
+        text created_at "建立時間 ISO 格式"
     }
 
-    REMINDERS {
-        int id PK
-        string name
-        real amount
-        int due_day
-        string is_paid
-        date paid_date
-        string note
-        datetime created_at
-        datetime updated_at
+    MARKER_TYPES {
+        int id PK "主鍵，自動遞增"
+        text name "種類名稱"
+        text color "顯示顏色（HEX）"
+        text icon "圖示（Emoji）"
+        int is_default "是否為預設種類"
+        int sort_order "排序順序"
+        text created_at "建立時間 ISO 格式"
     }
-
-    TEMPLATES {
-        int id PK
-        string name
-        string type
-        real amount
-        int category_id FK
-        string note
-        datetime created_at
-        datetime updated_at
-    }
-
-    CATEGORIES ||--o{ TRANSACTIONS : "分類包含多筆交易"
-    CATEGORIES ||--o{ TEMPLATES : "分類包含多個模板"
 ```
 
 ---
 
 ## 2. 資料表詳細說明
 
-### 2.1 categories（分類）
+### 2.1 recordings（錄音紀錄）
 
-儲存收入與支出的分類標籤。
+儲存每一次錄音的後設資料與檔案路徑。
 
-| 欄位 | 型別 | 必填 | 說明 |
-|------|------|------|------|
-| `id` | INTEGER | ✅ | 主鍵，自動遞增 |
-| `name` | TEXT | ✅ | 分類名稱（如「薪資」、「餐飲」） |
-| `type` | TEXT | ✅ | 分類類型：`income`（收入）或 `expense`（支出） |
-| `created_at` | TEXT | ✅ | 建立時間（ISO 8601 格式） |
+| 欄位 | 型別 | 必填 | 預設值 | 說明 |
+|------|------|------|--------|------|
+| `id` | INTEGER | ✅ | 自動遞增 | 主鍵（PK） |
+| `title` | TEXT | ✅ | — | 錄音標題（使用者輸入，預設為日期時間） |
+| `filepath` | TEXT | ✅ | — | 音訊檔案相對路徑（如 `uploads/rec_20260519.webm`） |
+| `duration_sec` | INTEGER | ✅ | 0 | 錄音總時長（秒） |
+| `category` | TEXT | ❌ | NULL | 錄音分類標籤（使用者自訂） |
+| `created_at` | TEXT | ✅ | CURRENT_TIMESTAMP | 建立時間（ISO 8601 格式） |
 
-- **Primary Key**：`id`
-- **約束**：`name` + `type` 組合唯一，避免重複分類
-
----
-
-### 2.2 transactions（交易紀錄）
-
-儲存所有收入與支出紀錄，收入與支出共用同一張表，透過 `type` 欄位區分。
-
-| 欄位 | 型別 | 必填 | 說明 |
-|------|------|------|------|
-| `id` | INTEGER | ✅ | 主鍵，自動遞增 |
-| `type` | TEXT | ✅ | 交易類型：`income`（收入）或 `expense`（支出） |
-| `amount` | REAL | ✅ | 金額（正數） |
-| `category_id` | INTEGER | ✅ | 分類 ID，外鍵關聯 `categories.id` |
-| `date` | TEXT | ✅ | 交易日期（YYYY-MM-DD 格式） |
-| `note` | TEXT | ❌ | 備註說明 |
-| `created_at` | TEXT | ✅ | 建立時間（ISO 8601 格式） |
-| `updated_at` | TEXT | ✅ | 最後更新時間（ISO 8601 格式） |
-
-- **Primary Key**：`id`
-- **Foreign Key**：`category_id` → `categories(id)`
+**索引：**
+- `id`（Primary Key）
+- `created_at`（用於排序查詢）
 
 ---
 
-### 2.3 reminders（繳費提醒）
+### 2.2 markers（標記）
 
-儲存每月定期帳單的提醒設定。
+儲存每個錄音中使用者標記的時間點與備註。
 
-| 欄位 | 型別 | 必填 | 說明 |
-|------|------|------|------|
-| `id` | INTEGER | ✅ | 主鍵，自動遞增 |
-| `name` | TEXT | ✅ | 帳單名稱（如「房租」、「電費」） |
-| `amount` | REAL | ✅ | 應繳金額 |
-| `due_day` | INTEGER | ✅ | 每月到期日（1–31） |
-| `is_paid` | TEXT | ✅ | 本月是否已繳：`yes` 或 `no`，預設 `no` |
-| `paid_date` | TEXT | ❌ | 實際繳費日期（YYYY-MM-DD 格式） |
-| `note` | TEXT | ❌ | 備註說明 |
-| `created_at` | TEXT | ✅ | 建立時間 |
-| `updated_at` | TEXT | ✅ | 最後更新時間 |
+| 欄位 | 型別 | 必填 | 預設值 | 說明 |
+|------|------|------|--------|------|
+| `id` | INTEGER | ✅ | 自動遞增 | 主鍵（PK） |
+| `recording_id` | INTEGER | ✅ | — | 所屬錄音 ID（FK → recordings.id） |
+| `type_id` | INTEGER | ✅ | — | 標記種類 ID（FK → marker_types.id） |
+| `timestamp_sec` | INTEGER | ✅ | — | 標記對應的錄音時間（秒） |
+| `note` | TEXT | ❌ | NULL | 使用者輸入的簡短備註 |
+| `created_at` | TEXT | ✅ | CURRENT_TIMESTAMP | 建立時間（ISO 8601 格式） |
 
-- **Primary Key**：`id`
+**索引：**
+- `id`（Primary Key）
+- `recording_id`（用於查詢某錄音的所有標記）
+- `type_id`（用於依種類篩選）
 
----
-
-### 2.4 templates（常用模板）
-
-儲存使用者建立的常用交易模板，用於一鍵快速記帳。
-
-| 欄位 | 型別 | 必填 | 說明 |
-|------|------|------|------|
-| `id` | INTEGER | ✅ | 主鍵，自動遞增 |
-| `name` | TEXT | ✅ | 模板名稱（如「午餐」、「通勤」） |
-| `type` | TEXT | ✅ | 交易類型：`income` 或 `expense` |
-| `amount` | REAL | ✅ | 預設金額 |
-| `category_id` | INTEGER | ✅ | 分類 ID，外鍵關聯 `categories.id` |
-| `note` | TEXT | ❌ | 預設備註 |
-| `created_at` | TEXT | ✅ | 建立時間 |
-| `updated_at` | TEXT | ✅ | 最後更新時間 |
-
-- **Primary Key**：`id`
-- **Foreign Key**：`category_id` → `categories(id)`
+**外鍵關聯：**
+- `recording_id` → `recordings.id`（CASCADE DELETE：刪除錄音時一併刪除所有標記）
+- `type_id` → `marker_types.id`（RESTRICT：不允許刪除仍被引用的標記種類）
 
 ---
 
-## 3. 預設分類資料
+### 2.3 marker_types（標記種類）
 
-系統初始化時會自動建立以下預設分類：
+儲存系統預設與使用者自訂的標記種類定義。
 
-### 收入分類（income）
+| 欄位 | 型別 | 必填 | 預設值 | 說明 |
+|------|------|------|--------|------|
+| `id` | INTEGER | ✅ | 自動遞增 | 主鍵（PK） |
+| `name` | TEXT | ✅ | — | 種類名稱（如「關鍵重點」、「故事」） |
+| `color` | TEXT | ✅ | `#e94560` | 顯示顏色（HEX 色碼） |
+| `icon` | TEXT | ✅ | `🏷` | 圖示（Emoji 字元） |
+| `is_default` | INTEGER | ✅ | 0 | 是否為系統預設種類（1=是, 0=否） |
+| `sort_order` | INTEGER | ✅ | 0 | 排序順序（數字越小越前面） |
+| `created_at` | TEXT | ✅ | CURRENT_TIMESTAMP | 建立時間（ISO 8601 格式） |
 
-| 名稱 |
-|------|
-| 薪資 |
-| 獎金 |
-| 兼職 |
-| 投資收益 |
-| 其他收入 |
+**索引：**
+- `id`（Primary Key）
+- `sort_order`（用於排序顯示）
 
-### 支出分類（expense）
+**預設資料（Seed Data）：**
 
-| 名稱 |
-|------|
-| 餐飲 |
-| 交通 |
-| 住宿 |
-| 娛樂 |
-| 日用品 |
-| 醫療 |
-| 教育 |
-| 訂閱服務 |
-| 其他支出 |
+| id | name | color | icon | is_default | sort_order |
+|----|------|-------|------|------------|------------|
+| 1 | 關鍵重點 | `#e94560` | 🔑 | 1 | 1 |
+| 2 | 故事 | `#0f3460` | 📖 | 1 | 2 |
+| 3 | 不清晰 | `#f39c12` | ❓ | 1 | 3 |
+| 4 | 行動項目 | `#2ecc71` | ⚡ | 1 | 4 |
+| 5 | 靈感 | `#9b59b6` | 💡 | 1 | 5 |
 
 ---
 
-> **下一步**：待團隊確認資料庫設計後，進入 API Design（路由設計）階段。
+## 3. 資料表關聯說明
+
+```
+marker_types (1) ──────< (N) markers (N) >────── (1) recordings
+    │                          │                        │
+    │  一個標記種類             │  一個標記               │  一個錄音
+    │  可被多個標記引用         │  屬於一個錄音            │  可擁有多個標記
+    │                          │  引用一個標記種類         │
+```
+
+- **recordings → markers**：一對多（One-to-Many）
+  - 一個錄音可以有 0 到多個標記
+  - 刪除錄音時，級聯刪除所有標記（CASCADE）
+
+- **marker_types → markers**：一對多（One-to-Many）
+  - 一個標記種類可被多個標記引用
+  - 不允許刪除仍被使用的標記種類（RESTRICT）
+
+---
+
+## 4. SQL 建表語法
+
+完整的 SQL 建表語法已儲存於 `database/schema.sql`，請參閱該檔案。
+
+---
+
+> **下一步：** 資料庫設計確認後，請進入路由設計階段（`/api-design`）。

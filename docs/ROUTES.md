@@ -1,276 +1,275 @@
-# 個人記帳簿系統 — 路由設計文件
+# 路由設計 — 即時標記錄音系統
 
-> **版本**：v1.0  
-> **建立日期**：2026-04-29  
-> **前置文件**：[PRD.md](./PRD.md) ｜ [ARCHITECTURE.md](./ARCHITECTURE.md) ｜ [DB_DESIGN.md](./DB_DESIGN.md)  
+> **文件版本：** v1.0
+> **建立日期：** 2026-05-19
+> **依據文件：** [PRD.md](PRD.md)、[ARCHITECTURE.md](ARCHITECTURE.md)、[DB_DESIGN.md](DB_DESIGN.md)
 
 ---
 
 ## 1. 路由總覽表格
 
-### 首頁（main）
+### 1.1 頁面路由
 
 | 功能 | HTTP 方法 | URL 路徑 | 對應模板 | 說明 |
-|------|-----------|----------|----------|------|
-| 首頁儀表板 | GET | `/` | `templates/index.html` | 顯示餘額統計、即將到期帳單、近期交易 |
+|------|-----------|---------|---------|------|
+| 錄音主頁面 | GET | `/` | `templates/index.html` | 錄音核心介面（波形 + 計時器 + 標記 + 控制按鈕） |
+| 儲存錄音 | POST | `/recordings` | — | 接收音訊檔案 + 標記 JSON，儲存後重導向至詳情頁 |
+| 錄音列表 | GET | `/recordings` | `templates/recordings/list.html` | 顯示所有歷史錄音，支援搜尋 |
+| 錄音詳情 | GET | `/recordings/<id>` | `templates/recordings/detail.html` | 播放錄音 + 標記清單 + 跳轉回聽 |
+| 更新錄音 | POST | `/recordings/<id>/update` | — | 更新標題 / 分類，重導向至詳情頁 |
+| 刪除錄音 | POST | `/recordings/<id>/delete` | — | 刪除錄音與檔案，重導向至列表頁 |
+| 下載錄音 | GET | `/recordings/<id>/download` | — | 下載音訊檔案 |
+| 更新標記 | POST | `/markers/<id>/update` | — | 更新標記備註，重導向至錄音詳情頁 |
+| 刪除標記 | POST | `/markers/<id>/delete` | — | 刪除標記，重導向至錄音詳情頁 |
+| 標記種類列表 | GET | `/settings/markers` | `templates/settings/marker_types.html` | 管理標記種類 |
+| 新增標記種類 | POST | `/settings/markers` | — | 新增種類，重導向至管理頁 |
+| 更新標記種類 | POST | `/settings/markers/<id>/update` | — | 更新種類，重導向至管理頁 |
+| 刪除標記種類 | POST | `/settings/markers/<id>/delete` | — | 刪除種類，重導向至管理頁 |
 
-### 交易紀錄（transaction）
+### 1.2 API 路由（JSON 回傳，供系統整合）
 
-| 功能 | HTTP 方法 | URL 路徑 | 對應模板 | 說明 |
-|------|-----------|----------|----------|------|
-| 交易列表 | GET | `/transactions` | `templates/transactions/list.html` | 顯示所有交易紀錄 |
-| 新增交易頁面 | GET | `/transactions/new` | `templates/transactions/form.html` | 顯示新增交易表單 |
-| 建立交易 | POST | `/transactions/new` | — | 接收表單，存入 DB，重導向至交易列表 |
-| 編輯交易頁面 | GET | `/transactions/<id>/edit` | `templates/transactions/form.html` | 顯示編輯交易表單（預填資料） |
-| 更新交易 | POST | `/transactions/<id>/edit` | — | 接收表單，更新 DB，重導向至交易列表 |
-| 刪除交易 | POST | `/transactions/<id>/delete` | — | 刪除後重導向至交易列表 |
-
-### 繳費提醒（reminder）
-
-| 功能 | HTTP 方法 | URL 路徑 | 對應模板 | 說明 |
-|------|-----------|----------|----------|------|
-| 提醒列表 | GET | `/reminders` | `templates/reminders/list.html` | 顯示所有繳費提醒 |
-| 新增提醒頁面 | GET | `/reminders/new` | `templates/reminders/form.html` | 顯示新增提醒表單 |
-| 建立提醒 | POST | `/reminders/new` | — | 接收表單，存入 DB，重導向至提醒列表 |
-| 編輯提醒頁面 | GET | `/reminders/<id>/edit` | `templates/reminders/form.html` | 顯示編輯提醒表單（預填資料） |
-| 更新提醒 | POST | `/reminders/<id>/edit` | — | 接收表單，更新 DB，重導向至提醒列表 |
-| 刪除提醒 | POST | `/reminders/<id>/delete` | — | 刪除後重導向至提醒列表 |
-| 標記已繳 | POST | `/reminders/<id>/paid` | — | 標記為已繳，重導向至提醒列表 |
-
-### 常用模板（template）
-
-| 功能 | HTTP 方法 | URL 路徑 | 對應模板 | 說明 |
-|------|-----------|----------|----------|------|
-| 模板列表 | GET | `/templates` | `templates/templates/list.html` | 顯示所有常用模板 |
-| 新增模板頁面 | GET | `/templates/new` | `templates/templates/form.html` | 顯示新增模板表單 |
-| 建立模板 | POST | `/templates/new` | — | 接收表單，存入 DB，重導向至模板列表 |
-| 編輯模板頁面 | GET | `/templates/<id>/edit` | `templates/templates/form.html` | 顯示編輯模板表單（預填資料） |
-| 更新模板 | POST | `/templates/<id>/edit` | — | 接收表單，更新 DB，重導向至模板列表 |
-| 刪除模板 | POST | `/templates/<id>/delete` | — | 刪除後重導向至模板列表 |
-| 套用模板 | POST | `/templates/<id>/apply` | — | 以模板資料建立交易，重導向至首頁 |
-
-### 統計報表（stats）
-
-| 功能 | HTTP 方法 | URL 路徑 | 對應模板 | 說明 |
-|------|-----------|----------|----------|------|
-| 統計頁面 | GET | `/stats` | `templates/stats/index.html` | 顯示收支趨勢圖表 |
+| 功能 | HTTP 方法 | URL 路徑 | 說明 |
+|------|-----------|---------|------|
+| 錄音列表 API | GET | `/api/recordings` | JSON 回傳所有錄音後設資料 |
+| 錄音詳情 API | GET | `/api/recordings/<id>` | JSON 回傳單一錄音 + 標記 |
+| 標記列表 API | GET | `/api/recordings/<id>/markers` | JSON 回傳該錄音的所有標記 |
+| 標記種類 API | GET | `/api/marker-types` | JSON 回傳所有標記種類 |
 
 ---
 
 ## 2. 每個路由的詳細說明
 
-### 2.1 首頁儀表板
+### 2.1 main Blueprint（`app/routes/main.py`）
 
-#### `GET /`
+#### `GET /` — 錄音主頁面
 
-- **輸入**：無
-- **處理邏輯**：
-  1. 呼叫 `transaction.get_balance()` 取得總餘額
-  2. 呼叫 `transaction.get_monthly_summary(year, month)` 取得本月收支
-  3. 呼叫 `transaction.get_recent_transactions(5)` 取得近期 5 筆交易
-  4. 呼叫 `reminder.get_upcoming_reminders(7)` 取得 7 天內到期帳單
-- **輸出**：渲染 `index.html`，傳入 `balance`、`monthly`、`recent_transactions`、`upcoming_reminders`
-- **錯誤處理**：資料庫連線失敗時顯示錯誤頁面
+- **輸入：** 無
+- **處理邏輯：**
+  1. `MarkerType.get_all()` 取得所有標記種類
+  2. 渲染 `index.html`，傳入標記種類清單
+- **輸出：** 渲染 `templates/index.html`
+- **錯誤處理：** 無特殊處理
 
 ---
 
-### 2.2 交易紀錄
+### 2.2 recording Blueprint（`app/routes/recording.py`）
 
-#### `GET /transactions`
+#### `POST /recordings` — 儲存錄音
 
-- **輸入**：無
-- **處理邏輯**：呼叫 `transaction.get_all_transactions()` 取得所有交易
-- **輸出**：渲染 `transactions/list.html`，傳入 `transactions`
-- **錯誤處理**：無特殊處理
+- **輸入：**
+  - `request.files['audio_file']` — 音訊檔案（WebM/WAV）
+  - `request.form['title']` — 錄音標題
+  - `request.form['duration_sec']` — 時長（秒）
+  - `request.form['category']` — 分類（可選）
+  - `request.form['markers_json']` — 標記 JSON 陣列字串
+- **處理邏輯：**
+  1. 驗證必填欄位
+  2. 儲存音訊檔案至 `static/uploads/`（生成唯一檔名）
+  3. `Recording.create(title, filepath, duration_sec, category)`
+  4. 解析 `markers_json`，`Marker.create_batch(recording_id, markers_list)`
+- **輸出：** 重導向至 `/recordings/<id>`
+- **錯誤處理：** 缺少必填欄位 → 回傳 400；檔案儲存失敗 → 回傳 500
 
-#### `GET /transactions/new`
+#### `GET /recordings` — 錄音列表
 
-- **輸入**：無
-- **處理邏輯**：呼叫 `category.get_all_categories()` 取得分類清單
-- **輸出**：渲染 `transactions/form.html`，傳入 `categories`、`transaction=None`
-- **錯誤處理**：無特殊處理
+- **輸入：** `request.args.get('q')` — 搜尋關鍵字（可選）
+- **處理邏輯：**
+  1. 若有搜尋字串 → `Recording.search(q)`
+  2. 否則 → `Recording.get_all()`
+  3. 為每筆錄音取得標記數量 `Recording.get_marker_count(id)`
+- **輸出：** 渲染 `templates/recordings/list.html`
+- **錯誤處理：** 無特殊處理
 
-#### `POST /transactions/new`
+#### `GET /recordings/<id>` — 錄音詳情
 
-- **輸入**：表單欄位 `type`、`amount`、`category_id`、`date`、`note`
-- **處理邏輯**：
-  1. 驗證表單資料（type 必須是 income/expense、amount 必須為正數、date 必須有效）
-  2. 呼叫 `transaction.create_transaction(type, amount, category_id, date, note)`
-- **輸出**：成功 → 重導向至 `/transactions`；失敗 → 重新渲染表單並顯示錯誤
-- **錯誤處理**：驗證失敗時用 `flash()` 顯示錯誤訊息
+- **輸入：** URL 參數 `id`（錄音 ID）
+- **處理邏輯：**
+  1. `Recording.get_by_id(id)`
+  2. `Marker.get_by_recording(id)`
+  3. `MarkerType.get_all()`（用於標記種類名稱/圖示顯示）
+- **輸出：** 渲染 `templates/recordings/detail.html`
+- **錯誤處理：** 找不到錄音 → 404
 
-#### `GET /transactions/<id>/edit`
+#### `POST /recordings/<id>/update` — 更新錄音
 
-- **輸入**：URL 參數 `id`
-- **處理邏輯**：
-  1. 呼叫 `transaction.get_transaction_by_id(id)` 取得該筆交易
-  2. 呼叫 `category.get_all_categories()` 取得分類清單
-- **輸出**：渲染 `transactions/form.html`，傳入 `categories`、`transaction`
-- **錯誤處理**：找不到交易 → 404
+- **輸入：**
+  - URL 參數 `id`
+  - `request.form['title']` — 新標題
+  - `request.form['category']` — 新分類
+- **處理邏輯：** `Recording.update(id, title, category)`
+- **輸出：** 重導向至 `/recordings/<id>`
+- **錯誤處理：** 找不到錄音 → 404
 
-#### `POST /transactions/<id>/edit`
+#### `POST /recordings/<id>/delete` — 刪除錄音
 
-- **輸入**：URL 參數 `id`、表單欄位同新增
-- **處理邏輯**：
-  1. 驗證表單資料
-  2. 呼叫 `transaction.update_transaction(id, type, amount, category_id, date, note)`
-- **輸出**：成功 → 重導向至 `/transactions`；失敗 → 重新渲染表單
-- **錯誤處理**：驗證失敗時用 `flash()` 顯示錯誤訊息
+- **輸入：** URL 參數 `id`
+- **處理邏輯：**
+  1. `Recording.get_by_id(id)` 取得檔案路徑
+  2. 刪除音訊檔案
+  3. `Recording.delete(id)`（標記因 CASCADE 自動刪除）
+- **輸出：** 重導向至 `/recordings`
+- **錯誤處理：** 找不到錄音 → 404
 
-#### `POST /transactions/<id>/delete`
+#### `GET /recordings/<id>/download` — 下載錄音
 
-- **輸入**：URL 參數 `id`
-- **處理邏輯**：呼叫 `transaction.delete_transaction(id)`
-- **輸出**：重導向至 `/transactions`
-- **錯誤處理**：找不到交易 → 404
-
----
-
-### 2.3 繳費提醒
-
-#### `GET /reminders`
-
-- **輸入**：無
-- **處理邏輯**：呼叫 `reminder.get_all_reminders()` 取得所有提醒
-- **輸出**：渲染 `reminders/list.html`，傳入 `reminders`
-
-#### `GET /reminders/new`
-
-- **輸入**：無
-- **處理邏輯**：無
-- **輸出**：渲染 `reminders/form.html`，傳入 `reminder=None`
-
-#### `POST /reminders/new`
-
-- **輸入**：表單欄位 `name`、`amount`、`due_day`、`note`
-- **處理邏輯**：
-  1. 驗證資料（amount 正數、due_day 在 1–31 之間）
-  2. 呼叫 `reminder.create_reminder(name, amount, due_day, note)`
-- **輸出**：成功 → 重導向至 `/reminders`
-- **錯誤處理**：驗證失敗時顯示錯誤訊息
-
-#### `GET /reminders/<id>/edit`
-
-- **輸入**：URL 參數 `id`
-- **處理邏輯**：呼叫 `reminder.get_reminder_by_id(id)`
-- **輸出**：渲染 `reminders/form.html`，傳入 `reminder`
-- **錯誤處理**：找不到 → 404
-
-#### `POST /reminders/<id>/edit`
-
-- **輸入**：URL 參數 `id`、表單欄位同新增
-- **處理邏輯**：驗證後呼叫 `reminder.update_reminder(id, name, amount, due_day, note)`
-- **輸出**：成功 → 重導向至 `/reminders`
-
-#### `POST /reminders/<id>/delete`
-
-- **輸入**：URL 參數 `id`
-- **處理邏輯**：呼叫 `reminder.delete_reminder(id)`
-- **輸出**：重導向至 `/reminders`
-
-#### `POST /reminders/<id>/paid`
-
-- **輸入**：URL 參數 `id`
-- **處理邏輯**：呼叫 `reminder.mark_as_paid(id)`
-- **輸出**：重導向至 `/reminders`
+- **輸入：** URL 參數 `id`
+- **處理邏輯：** `Recording.get_by_id(id)`，回傳檔案
+- **輸出：** `send_file()` 下載音訊檔案
+- **錯誤處理：** 找不到錄音或檔案 → 404
 
 ---
 
-### 2.4 常用模板
+### 2.3 marker Blueprint（`app/routes/marker.py`）
 
-#### `GET /templates`
+#### `POST /markers/<id>/update` — 更新標記備註
 
-- **輸入**：無
-- **處理邏輯**：呼叫 `template.get_all_templates()`
-- **輸出**：渲染 `templates/list.html`，傳入 `templates`
+- **輸入：**
+  - URL 參數 `id`（標記 ID）
+  - `request.form['note']` — 新備註
+- **處理邏輯：** `Marker.update(id, note)`
+- **輸出：** 重導向至 `/recordings/<recording_id>`
+- **錯誤處理：** 找不到標記 → 404
 
-#### `GET /templates/new`
+#### `POST /markers/<id>/delete` — 刪除標記
 
-- **輸入**：無
-- **處理邏輯**：呼叫 `category.get_all_categories()` 取得分類清單
-- **輸出**：渲染 `templates/form.html`，傳入 `categories`、`template=None`
-
-#### `POST /templates/new`
-
-- **輸入**：表單欄位 `name`、`type`、`amount`、`category_id`、`note`
-- **處理邏輯**：驗證後呼叫 `template.create_template(name, type, amount, category_id, note)`
-- **輸出**：成功 → 重導向至 `/templates`
-
-#### `GET /templates/<id>/edit`
-
-- **輸入**：URL 參數 `id`
-- **處理邏輯**：取得模板資料與分類清單
-- **輸出**：渲染 `templates/form.html`，傳入 `categories`、`template`
-- **錯誤處理**：找不到 → 404
-
-#### `POST /templates/<id>/edit`
-
-- **輸入**：URL 參數 `id`、表單欄位同新增
-- **處理邏輯**：驗證後呼叫 `template.update_template(...)`
-- **輸出**：成功 → 重導向至 `/templates`
-
-#### `POST /templates/<id>/delete`
-
-- **輸入**：URL 參數 `id`
-- **處理邏輯**：呼叫 `template.delete_template(id)`
-- **輸出**：重導向至 `/templates`
-
-#### `POST /templates/<id>/apply`
-
-- **輸入**：URL 參數 `id`
-- **處理邏輯**：
-  1. 呼叫 `template.get_template_by_id(id)` 取得模板資料
-  2. 呼叫 `transaction.create_transaction(...)` 以模板資料 + 今天日期建立交易
-- **輸出**：重導向至 `/`（首頁）
-- **錯誤處理**：找不到模板 → 404
+- **輸入：** URL 參數 `id`（標記 ID）
+- **處理邏輯：**
+  1. `Marker.get_by_id(id)` 取得 `recording_id`
+  2. `Marker.delete(id)`
+- **輸出：** 重導向至 `/recordings/<recording_id>`
+- **錯誤處理：** 找不到標記 → 404
 
 ---
 
-### 2.5 統計報表
+### 2.4 settings（標記種類管理，整合在 marker Blueprint）
 
-#### `GET /stats`
+#### `GET /settings/markers` — 標記種類列表
 
-- **輸入**：無
-- **處理邏輯**：
-  1. 取得最近 6 個月的月份列表
-  2. 對每個月呼叫 `transaction.get_monthly_summary(year, month)`
-  3. 組合成圖表資料
-- **輸出**：渲染 `stats/index.html`，傳入 `monthly_data`
-- **錯誤處理**：無特殊處理
+- **輸入：** 無
+- **處理邏輯：**
+  1. `MarkerType.get_all()`
+  2. 為每個種類取得 `MarkerType.get_usage_count(id)`
+- **輸出：** 渲染 `templates/settings/marker_types.html`
+
+#### `POST /settings/markers` — 新增標記種類
+
+- **輸入：**
+  - `request.form['name']` — 種類名稱
+  - `request.form['color']` — 顏色 HEX
+  - `request.form['icon']` — 圖示 Emoji
+- **處理邏輯：** `MarkerType.create(name, color, icon)`
+- **輸出：** 重導向至 `/settings/markers`
+
+#### `POST /settings/markers/<id>/update` — 更新標記種類
+
+- **輸入：**
+  - URL 參數 `id`
+  - `request.form['name']`、`request.form['color']`、`request.form['icon']`
+- **處理邏輯：** `MarkerType.update(id, name, color, icon)`
+- **輸出：** 重導向至 `/settings/markers`
+- **錯誤處理：** 找不到種類 → 404
+
+#### `POST /settings/markers/<id>/delete` — 刪除標記種類
+
+- **輸入：** URL 參數 `id`
+- **處理邏輯：** `MarkerType.delete(id)`
+- **輸出：** 重導向至 `/settings/markers`
+- **錯誤處理：** 找不到種類 → 404；仍有標記引用 → 顯示錯誤訊息
+
+---
+
+### 2.5 api Blueprint（`app/routes/api.py`）
+
+#### `GET /api/recordings` — 錄音列表 API
+
+- **輸出：** `{ "recordings": [ {...}, ... ] }`
+
+#### `GET /api/recordings/<id>` — 錄音詳情 API
+
+- **輸出：** `{ "recording": {...}, "markers": [{...}, ...] }`
+
+#### `GET /api/recordings/<id>/markers` — 標記列表 API
+
+- **輸出：** `{ "markers": [ {...}, ... ] }`
+
+#### `GET /api/marker-types` — 標記種類 API
+
+- **輸出：** `{ "marker_types": [ {...}, ... ] }`
 
 ---
 
 ## 3. Jinja2 模板清單
 
-所有模板皆繼承 `base.html`，使用 `{% extends "base.html" %}` 與 `{% block content %}`。
+所有模板皆繼承 `base.html` 基礎模板。
 
-| 模板檔案 | 繼承 | 說明 |
-|----------|------|------|
-| `base.html` | — | 共用版面：導覽列、頁尾、CSS/JS 引入、flash 訊息 |
-| `index.html` | `base.html` | 首頁儀表板：餘額卡片、本月收支、到期提醒、近期交易 |
-| `transactions/list.html` | `base.html` | 交易紀錄列表，含編輯/刪除按鈕 |
-| `transactions/form.html` | `base.html` | 新增/編輯交易表單（共用，依是否有 transaction 資料判斷模式） |
-| `reminders/list.html` | `base.html` | 繳費提醒列表，含標記已繳/編輯/刪除按鈕 |
-| `reminders/form.html` | `base.html` | 新增/編輯提醒表單 |
-| `templates/list.html` | `base.html` | 常用模板列表，含套用/編輯/刪除按鈕 |
-| `templates/form.html` | `base.html` | 新增/編輯模板表單 |
-| `stats/index.html` | `base.html` | 統計報表頁面，含 Chart.js 圖表 |
+| 模板路徑 | 繼承 | 說明 |
+|---------|------|------|
+| `templates/base.html` | — | 基礎模板：HTML 骨架、導覽列、CSS/JS 引入 |
+| `templates/index.html` | `base.html` | 錄音主頁面：波形 + 計時器 + 標記按鈕 + 控制按鈕 |
+| `templates/recordings/list.html` | `base.html` | 錄音列表：搜尋 + 錄音卡片 |
+| `templates/recordings/detail.html` | `base.html` | 錄音詳情：播放器 + 標記清單 + 編輯表單 |
+| `templates/settings/marker_types.html` | `base.html` | 標記種類管理：新增 / 編輯 / 刪除表單 |
+
+### `base.html` 結構
+
+```
+<!DOCTYPE html>
+├── <head>
+│   ├── meta charset / viewport
+│   ├── <title>{% block title %}{% endblock %} - 即時標記錄音系統</title>
+│   ├── <link> style.css
+│   └── {% block extra_head %}{% endblock %}
+├── <body>
+│   ├── <nav> 導覽列
+│   │   ├── 品牌標誌 / 系統名稱
+│   │   ├── 首頁（錄音）連結
+│   │   ├── 錄音列表連結
+│   │   └── 標記種類設定連結
+│   ├── <main> {% block content %}{% endblock %}
+│   ├── <script> 共用 JS（如有）
+│   └── {% block extra_scripts %}{% endblock %}
+```
 
 ---
 
-## 4. 路由骨架程式碼
+## 4. 路由 — 模板 — Model 對照圖
 
-路由骨架已建立在 `app/routes/` 目錄中，每個檔案只包含函式定義與 docstring，不含實作邏輯。
+```mermaid
+flowchart LR
+    subgraph Routes["路由 (Controller)"]
+        R1["main.py<br/>GET /"]
+        R2["recording.py<br/>POST /recordings<br/>GET /recordings<br/>GET /recordings/id<br/>POST .../update<br/>POST .../delete<br/>GET .../download"]
+        R3["marker.py<br/>POST /markers/id/update<br/>POST /markers/id/delete<br/>GET /settings/markers<br/>POST /settings/markers<br/>POST .../update<br/>POST .../delete"]
+        R4["api.py<br/>GET /api/..."]
+    end
 
-| 檔案 | Blueprint 名稱 | 負責功能 |
-|------|----------------|----------|
-| `app/routes/__init__.py` | — | 套件初始化 |
-| `app/routes/main.py` | `main_bp` | 首頁儀表板 |
-| `app/routes/transaction.py` | `transaction_bp` | 交易紀錄 CRUD |
-| `app/routes/reminder.py` | `reminder_bp` | 繳費提醒 CRUD |
-| `app/routes/template.py` | `template_bp` | 常用模板 CRUD + 套用 |
-| `app/routes/stats.py` | `stats_bp` | 統計報表 |
+    subgraph Models["模型 (Model)"]
+        M1["Recording"]
+        M2["Marker"]
+        M3["MarkerType"]
+    end
+
+    subgraph Templates["模板 (View)"]
+        T1["index.html"]
+        T2["recordings/list.html"]
+        T3["recordings/detail.html"]
+        T4["settings/marker_types.html"]
+    end
+
+    R1 --> M3
+    R1 --> T1
+    R2 --> M1
+    R2 --> M2
+    R2 --> T2
+    R2 --> T3
+    R3 --> M2
+    R3 --> M3
+    R3 --> T4
+    R4 --> M1
+    R4 --> M2
+    R4 --> M3
+```
 
 ---
 
-> **下一步**：待團隊確認路由設計後，進入 Implementation（程式碼實作）階段。
+> **下一步：** 路由設計確認後，可根據路由表進行團隊分工，然後進入程式碼實作階段（`/implementation`）。

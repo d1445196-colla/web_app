@@ -1,3 +1,25 @@
-<!-- app/templates/index.html — 首頁儀表板（待實作） -->
-<!-- 繼承：base.html -->
-<!-- 內容：餘額卡片、本月收支、即將到期帳單、近期交易列表 -->
+{% extends "base.html" %}
+
+{% block title %}錄音{% endblock %}
+
+{% block content %}
+<!-- TODO: 實作錄音主頁面 -->
+<!-- 包含以下區塊：
+    1. 錄音計時器（頂部 HH:MM:SS）
+    2. 即時音量波形視覺化（畫面中央 Canvas）
+    3. 標記按鈕區（依 marker_types 動態產生）
+    4. 錄音控制按鈕（開始 / 暫停 / 停止）
+    5. 錄音儲存表單（停止後顯示）
+-->
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- TODO: 引入前端 JS 模組 -->
+<!--
+<script src="{{ url_for('static', filename='js/recorder.js') }}"></script>
+<script src="{{ url_for('static', filename='js/waveform.js') }}"></script>
+<script src="{{ url_for('static', filename='js/timer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/marker.js') }}"></script>
+<script src="{{ url_for('static', filename='js/keyboard.js') }}"></script>
+-->
+{% endblock %}

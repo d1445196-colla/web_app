@@ -1,8 +1,8 @@
-# 個人記帳簿系統 — 系統架構文件
+# 系統架構設計 — 即時標記錄音系統
 
-> **版本**：v1.0  
-> **建立日期**：2026-04-29  
-> **前置文件**：[PRD.md](./PRD.md)  
+> **文件版本：** v1.0
+> **建立日期：** 2026-05-19
+> **依據文件：** [PRD.md](PRD.md)
 
 ---
 
@@ -11,360 +11,359 @@
 ### 1.1 選用技術與原因
 
 | 技術 | 角色 | 選用原因 |
-|------|------|----------|
-| **Python 3** | 程式語言 | 語法簡潔易學，生態豐富，適合快速開發 |
-| **Flask** | 後端框架 | 輕量級微框架，學習曲線低，適合中小型專案 |
-| **Jinja2** | 模板引擎 | Flask 內建支援，可直接在 HTML 中嵌入 Python 邏輯 |
-| **SQLite** | 資料庫 | 免安裝、零配置，資料存在單一檔案中，適合個人應用 |
-| **HTML5 + CSS3** | 前端結構與樣式 | 標準網頁技術，不需額外框架 |
-| **JavaScript** | 前端互動 | 處理圖表渲染、動態表單等互動功能 |
-| **Chart.js** | 圖表函式庫 | 輕量、易用，適合繪製收支趨勢圖表 |
+|------|------|---------|
+| **Python + Flask** | 後端 Web 框架 | 輕量、易上手，適合快速開發原型；豐富的套件生態系 |
+| **Jinja2** | HTML 模板引擎 | Flask 內建，支援模板繼承與巨集，減少重複 HTML |
+| **SQLite** | 關聯式資料庫 | 零配置、單檔案部署，適合單機 / 小團隊使用情境 |
+| **Web Audio API** | 前端音訊擷取與分析 | 瀏覽器原生 API，可即時取得音量資料繪製波形 |
+| **MediaRecorder API** | 前端錄音 | 瀏覽器原生 API，可將麥克風串流錄製為音訊檔案 |
+| **Canvas API** | 前端波形繪製 | 高效能 2D 繪圖，適合每秒 60 幀的即時波形動畫 |
+| **vanilla JavaScript** | 前端互動邏輯 | 不依賴前端框架，降低複雜度，適合教學情境 |
 
 ### 1.2 Flask MVC 模式說明
 
-本專案採用 **MVC（Model–View–Controller）** 架構模式，各層職責如下：
+本專案採用 **MVC（Model-View-Controller）** 架構模式，將程式碼依職責分層：
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      瀏覽器 (Browser)                     │
-│                  使用者透過瀏覽器操作系統                    │
-└────────────────────────┬────────────────────────────────┘
-                         │ HTTP Request
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│              Controller（Flask Routes）                   │
-│                  app/routes/*.py                         │
-│                                                         │
-│  • 接收使用者的 HTTP 請求（GET / POST）                    │
-│  • 呼叫 Model 讀寫資料                                   │
-│  • 將資料傳給 View（模板）渲染成 HTML                      │
-│  • 回傳 HTTP Response 給瀏覽器                            │
-└──────────┬──────────────────────────┬───────────────────┘
-           │                          │
-           ▼                          ▼
-┌────────────────────┐    ┌──────────────────────────────┐
-│   Model（模型）     │    │     View（Jinja2 模板）       │
-│  app/models/*.py   │    │   app/templates/*.html       │
-│                    │    │                              │
-│ • 定義資料表結構    │    │ • HTML 頁面模板              │
-│ • 封裝 CRUD 操作   │    │ • 接收 Controller 傳來的資料  │
-│ • 資料驗證邏輯     │    │ • 動態渲染頁面內容            │
-└────────┬───────────┘    └──────────────────────────────┘
-         │
-         ▼
-┌────────────────────┐
-│  SQLite 資料庫      │
-│ instance/database.db│
-│                    │
-│ • 儲存所有交易紀錄  │
-│ • 儲存分類、模板等  │
-│ • 單一檔案即資料庫  │
-└────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                        瀏覽器 (Browser)                      │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  Web Audio API / MediaRecorder / Canvas（前端 JS）      │  │
+│  └───────────────────────────────────────────────────────┘  │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ HTTP Request / 上傳音訊檔
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Flask 後端 (Server)                        │
+│                                                             │
+│  ┌─────────────┐   ┌──────────────┐   ┌──────────────────┐ │
+│  │ Controller  │──▶│    Model     │──▶│    SQLite DB     │ │
+│  │ (routes/)   │   │  (models/)   │   │ (instance/       │ │
+│  │             │◀──│              │◀──│   database.db)   │ │
+│  └──────┬──────┘   └──────────────┘   └──────────────────┘ │
+│         │                                                   │
+│         ▼                                                   │
+│  ┌─────────────┐                                            │
+│  │    View     │                                            │
+│  │(templates/) │──▶ HTML 回應給瀏覽器                         │
+│  └─────────────┘                                            │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**簡單來說：**
+| 層級 | 資料夾 | 職責 |
+|------|-------|------|
+| **Model（模型）** | `app/models/` | 定義資料結構、負責與 SQLite 資料庫的讀寫操作（CRUD） |
+| **View（視圖）** | `app/templates/` | Jinja2 HTML 模板，負責頁面的呈現與排版 |
+| **Controller（控制器）** | `app/routes/` | Flask 路由，接收 HTTP 請求、呼叫 Model、選擇 View 回傳 |
+| **Static（靜態資源）** | `app/static/` | CSS 樣式表、JavaScript 腳本（含音訊處理）、圖片等 |
 
-1. 使用者在瀏覽器點擊按鈕或送出表單
-2. **Controller**（路由）接收請求，決定要做什麼
-3. Controller 呼叫 **Model** 來讀取或寫入資料庫
-4. Controller 把資料交給 **View**（模板）來產生 HTML
-5. 瀏覽器收到 HTML 並顯示頁面給使用者
+### 1.3 前後端協作模式
+
+本系統的特殊之處在於**錄音與波形視覺化完全在前端（瀏覽器）執行**，後端負責**資料持久化與頁面渲染**：
+
+```
+前端（瀏覽器）負責：                    後端（Flask）負責：
+├── 麥克風存取與錄音 (MediaRecorder)     ├── 頁面渲染 (Jinja2)
+├── 即時波形繪製 (Web Audio + Canvas)    ├── 接收 & 儲存錄音檔案
+├── 計時器顯示                          ├── 標記資料 CRUD
+├── 標記按鈕 UI 與暫存                  ├── 錄音後設資料管理
+└── 鍵盤快捷鍵監聽                      └── API 端點（整合用）
+```
+
+> **關鍵流程：** 使用者在前端完成錄音 → 點選「停止」→ 前端將**音訊 Blob** 與**標記 JSON** 一起透過 `fetch()` 上傳至後端 → 後端儲存檔案與資料庫記錄。
 
 ---
 
 ## 2. 專案資料夾結構
 
 ```
-web_app_development-1/
+即時標記錄音系統/
 │
-├── app.py                     ← 🚀 應用程式入口（啟動 Flask Server）
-├── config.py                  ← ⚙️ 設定檔（資料庫路徑、密鑰等）
-├── requirements.txt           ← 📦 Python 套件清單
+├── app.py                          ← Flask 應用程式入口
+├── config.py                       ← 設定檔（SECRET_KEY、DB 路徑等）
+├── requirements.txt                ← Python 套件依賴清單
 │
-├── app/                       ← 📂 主要應用程式目錄
-│   ├── __init__.py            ← Flask App 工廠函式（create_app）
+├── app/                            ← 主要應用程式套件
+│   ├── __init__.py                 ← Flask app 工廠函式（create_app）
 │   │
-│   ├── models/                ← 📊 Model 層（資料庫模型）
+│   ├── models/                     ← Model 層：資料庫模型
 │   │   ├── __init__.py
-│   │   ├── database.py        ← 資料庫連線與初始化
-│   │   ├── transaction.py     ← 交易紀錄 Model（收入/支出 CRUD）
-│   │   ├── category.py        ← 分類 Model（收入/支出分類 CRUD）
-│   │   ├── reminder.py        ← 繳費提醒 Model（CRUD）
-│   │   └── template.py        ← 常用模板 Model（CRUD）
+│   │   ├── recording.py            ← 錄音紀錄模型（Recording）
+│   │   ├── marker.py               ← 標記模型（Marker）
+│   │   └── marker_type.py          ← 標記種類模型（MarkerType）
 │   │
-│   ├── routes/                ← 🎮 Controller 層（Flask 路由）
+│   ├── routes/                     ← Controller 層：Flask 路由
 │   │   ├── __init__.py
-│   │   ├── main.py            ← 首頁儀表板路由
-│   │   ├── transaction.py     ← 交易紀錄路由（新增/編輯/刪除/列表）
-│   │   ├── reminder.py        ← 繳費提醒路由
-│   │   ├── template.py        ← 常用模板路由
-│   │   └── stats.py           ← 統計報表路由
+│   │   ├── main.py                 ← 首頁 / 錄音主頁路由
+│   │   ├── recording.py            ← 錄音相關路由（儲存、列表、詳情、刪除）
+│   │   ├── marker.py               ← 標記相關路由（CRUD）
+│   │   └── api.py                  ← RESTful API 端點（系統整合用）
 │   │
-│   ├── templates/             ← 🎨 View 層（Jinja2 HTML 模板）
-│   │   ├── base.html          ← 共用版面（導覽列、頁尾、CSS/JS 引入）
-│   │   ├── index.html         ← 首頁儀表板
-│   │   ├── transactions/
-│   │   │   ├── list.html      ← 交易紀錄列表
-│   │   │   ├── form.html      ← 新增/編輯交易表單
-│   │   │   └── detail.html    ← 交易詳情（選用）
-│   │   ├── reminders/
-│   │   │   ├── list.html      ← 繳費提醒列表
-│   │   │   └── form.html      ← 新增/編輯提醒表單
-│   │   ├── templates/
-│   │   │   ├── list.html      ← 常用模板列表
-│   │   │   └── form.html      ← 新增/編輯模板表單
-│   │   └── stats/
-│   │       └── index.html     ← 統計報表頁面
+│   ├── templates/                  ← View 層：Jinja2 HTML 模板
+│   │   ├── base.html               ← 基礎模板（共用 header / footer / CSS / JS 引入）
+│   │   ├── index.html              ← 錄音主頁面（波形 + 計時器 + 標記 + 控制按鈕）
+│   │   ├── save.html               ← 錄音儲存表單頁面
+│   │   ├── recordings/
+│   │   │   ├── list.html           ← 錄音列表頁面
+│   │   │   └── detail.html         ← 錄音詳情 / 回顧頁面
+│   │   └── settings/
+│   │       └── marker_types.html   ← 標記種類管理頁面
 │   │
-│   └── static/                ← 📁 靜態資源
+│   └── static/                     ← 靜態資源
 │       ├── css/
-│       │   └── style.css      ← 全站樣式
-│       └── js/
-│           └── main.js        ← 前端互動邏輯（圖表、表單驗證等）
+│       │   └── style.css           ← 全站樣式
+│       ├── js/
+│       │   ├── recorder.js         ← 錄音控制邏輯（MediaRecorder 封裝）
+│       │   ├── waveform.js         ← 波形視覺化邏輯（Web Audio + Canvas）
+│       │   ├── timer.js            ← 計時器邏輯
+│       │   ├── marker.js           ← 標記按鈕互動邏輯
+│       │   └── keyboard.js         ← 鍵盤快捷鍵監聽
+│       └── uploads/                ← 上傳的錄音檔案存放處
 │
-├── instance/                  ← 🗄️ 實例資料（不進版控）
-│   └── database.db            ← SQLite 資料庫檔案
+├── database/                       ← 資料庫相關
+│   └── schema.sql                  ← SQL 建表語法
 │
-├── docs/                      ← 📝 專案文件
-│   ├── PRD.md                 ← 產品需求文件
-│   └── ARCHITECTURE.md        ← 系統架構文件（本文件）
+├── instance/                       ← Flask instance 資料夾（自動產生）
+│   └── database.db                 ← SQLite 資料庫檔案
 │
-└── .gitignore                 ← Git 忽略規則
+└── docs/                           ← 設計文件
+    ├── PRD.md                      ← 產品需求文件
+    ├── ARCHITECTURE.md             ← 系統架構文件（本文件）
+    ├── FLOWCHART.md                ← 使用者流程圖
+    ├── DB_DESIGN.md                ← 資料庫設計
+    └── ROUTES.md                   ← 路由設計
 ```
 
-### 各目錄職責對照
+### 各資料夾 / 檔案用途說明
 
-| 目錄/檔案 | MVC 層級 | 職責說明 |
-|-----------|---------|---------|
-| `app/models/` | **Model** | 定義資料表結構，封裝所有資料庫操作（CRUD） |
-| `app/routes/` | **Controller** | 處理 HTTP 請求，串接 Model 與 View |
-| `app/templates/` | **View** | 定義 HTML 頁面結構，動態渲染資料 |
-| `app/static/` | View 輔助 | CSS 樣式、JavaScript 互動邏輯 |
-| `instance/` | 資料層 | SQLite 資料庫實體檔案 |
-| `config.py` | 設定 | 集中管理應用程式設定 |
-| `app.py` | 入口 | 啟動 Flask 開發伺服器 |
+| 路徑 | 類型 | 說明 |
+|------|------|------|
+| `app.py` | 入口 | 啟動 Flask 開發伺服器，呼叫 `create_app()` |
+| `config.py` | 設定 | 集中管理環境變數、SECRET_KEY、資料庫路徑、上傳目錄路徑 |
+| `requirements.txt` | 依賴 | 列出 `flask` 等所需套件，方便 `pip install -r requirements.txt` |
+| `app/__init__.py` | 工廠 | 建立 Flask app 實例、註冊 Blueprint、初始化資料庫 |
+| `app/models/` | Model | 每個檔案對應一張資料表，封裝 SQL 查詢為 Python 方法 |
+| `app/routes/` | Controller | 每個檔案用 `Blueprint` 組織相關路由，保持模組化 |
+| `app/templates/` | View | Jinja2 模板，`base.html` 定義共用版面，其他頁面繼承它 |
+| `app/static/js/` | 前端 JS | 各功能拆分為獨立模組，方便維護與分工 |
+| `app/static/uploads/` | 檔案儲存 | 錄音音訊檔案的實際儲存位置 |
+| `database/schema.sql` | Schema | 資料庫建表 SQL，可用於初始化或重建資料庫 |
+| `instance/` | 實例資料 | Flask 內建的 instance 資料夾，存放 SQLite DB 檔案 |
 
 ---
 
 ## 3. 元件關係圖
 
-### 3.1 請求處理流程
-
-```mermaid
-sequenceDiagram
-    participant B as 瀏覽器
-    participant R as Flask Route<br>(Controller)
-    participant M as Model
-    participant DB as SQLite
-    participant T as Jinja2 Template<br>(View)
-
-    B->>R: HTTP Request（GET /transactions）
-    R->>M: 呼叫 Model 取得資料
-    M->>DB: SQL 查詢
-    DB-->>M: 回傳查詢結果
-    M-->>R: 回傳 Python 物件
-    R->>T: render_template() 傳入資料
-    T-->>R: 渲染完成的 HTML
-    R-->>B: HTTP Response（HTML 頁面）
-```
-
-### 3.2 系統模組關係
+### 3.1 整體系統架構圖
 
 ```mermaid
 graph TB
-    subgraph 瀏覽器
-        USER["使用者"]
+    subgraph Browser["瀏覽器（前端）"]
+        MIC["🎤 麥克風"]
+        WA["Web Audio API<br/>AnalyserNode"]
+        MR["MediaRecorder API"]
+        CV["Canvas API<br/>波形繪製"]
+        UI["HTML/CSS/JS<br/>UI 介面"]
+        
+        MIC --> WA
+        MIC --> MR
+        WA --> CV
+        CV --> UI
     end
-
-    subgraph "Flask 應用程式 (app/)"
-        subgraph "Controller (routes/)"
-            R_MAIN["main.py<br>首頁儀表板"]
-            R_TXN["transaction.py<br>交易紀錄"]
-            R_REM["reminder.py<br>繳費提醒"]
-            R_TPL["template.py<br>常用模板"]
-            R_STAT["stats.py<br>統計報表"]
-        end
-
-        subgraph "Model (models/)"
-            M_TXN["transaction.py<br>交易 CRUD"]
-            M_CAT["category.py<br>分類 CRUD"]
-            M_REM["reminder.py<br>提醒 CRUD"]
-            M_TPL["template.py<br>模板 CRUD"]
-            M_DB["database.py<br>DB 連線"]
-        end
-
-        subgraph "View (templates/)"
-            V_BASE["base.html<br>共用版面"]
-            V_IDX["index.html<br>首頁"]
-            V_TXN["transactions/<br>交易頁面"]
-            V_REM["reminders/<br>提醒頁面"]
-            V_TPL["templates/<br>模板頁面"]
-            V_STAT["stats/<br>統計頁面"]
-        end
+    
+    subgraph Flask["Flask 後端"]
+        RT["routes/<br/>（Controller）"]
+        MD["models/<br/>（Model）"]
+        TM["templates/<br/>（View）"]
+        ST["static/uploads/<br/>（檔案儲存）"]
     end
-
-    subgraph 資料庫
-        DB["SQLite<br>database.db"]
+    
+    subgraph DB["資料庫"]
+        SQ["SQLite<br/>database.db"]
     end
+    
+    UI -- "HTTP GET<br/>頁面請求" --> RT
+    UI -- "fetch() POST<br/>上傳音訊+標記" --> RT
+    RT --> MD
+    MD --> SQ
+    SQ --> MD
+    MD --> RT
+    RT --> TM
+    TM -- "HTML 回應" --> UI
+    RT -- "儲存檔案" --> ST
+    
+    style Browser fill:#1a1a2e,stroke:#e94560,color:#fff
+    style Flask fill:#16213e,stroke:#0f3460,color:#fff
+    style DB fill:#0f3460,stroke:#533483,color:#fff
+```
 
-    USER -->|HTTP| R_MAIN
-    USER -->|HTTP| R_TXN
-    USER -->|HTTP| R_REM
-    USER -->|HTTP| R_TPL
-    USER -->|HTTP| R_STAT
+### 3.2 錄音主頁面元件圖
 
-    R_MAIN --> M_TXN
-    R_MAIN --> M_REM
-    R_TXN --> M_TXN
-    R_TXN --> M_CAT
-    R_REM --> M_REM
-    R_TPL --> M_TPL
-    R_STAT --> M_TXN
+```mermaid
+graph TB
+    subgraph RecordPage["錄音主頁面 (index.html)"]
+        TIMER["⏱ 計時器<br/>timer.js<br/>HH:MM:SS"]
+        WAVE["🌊 波形視覺化<br/>waveform.js<br/>Canvas 即時繪製"]
+        MARKERS["🏷 標記按鈕區<br/>marker.js<br/>關鍵重點 / 故事 / 不清晰..."]
+        CONTROLS["🎛 錄音控制<br/>recorder.js<br/>開始 / 暫停 / 停止"]
+        KB["⌨ 鍵盤快捷鍵<br/>keyboard.js"]
+    end
+    
+    TIMER --- WAVE
+    WAVE --- MARKERS
+    MARKERS --- CONTROLS
+    KB -.-> CONTROLS
+    KB -.-> MARKERS
+    
+    style RecordPage fill:#1a1a2e,stroke:#e94560,color:#fff
+```
 
-    R_MAIN --> V_IDX
-    R_TXN --> V_TXN
-    R_REM --> V_REM
-    R_TPL --> V_TPL
-    R_STAT --> V_STAT
+### 3.3 資料流向圖
 
-    M_TXN --> M_DB
-    M_CAT --> M_DB
-    M_REM --> M_DB
-    M_TPL --> M_DB
-    M_DB --> DB
+```mermaid
+sequenceDiagram
+    participant U as 使用者
+    participant B as 瀏覽器 (JS)
+    participant F as Flask (routes/)
+    participant M as Model (models/)
+    participant D as SQLite DB
+    participant FS as 檔案系統
 
-    V_IDX --> V_BASE
-    V_TXN --> V_BASE
-    V_REM --> V_BASE
-    V_TPL --> V_BASE
-    V_STAT --> V_BASE
+    U->>B: 點選「開始錄音」
+    B->>B: MediaRecorder 開始錄音
+    B->>B: Web Audio 分析音量 → Canvas 繪製波形
+    
+    U->>B: 點選標記按鈕（如「關鍵重點」）
+    B->>B: 暫存標記（時間戳 + 種類）至 JS 陣列
+    
+    U->>B: 點選「停止錄音」
+    B->>B: MediaRecorder 產生音訊 Blob
+    
+    U->>B: 輸入標題，點選「儲存」
+    B->>F: POST /recordings (FormData: 音訊檔 + 標記 JSON + 標題)
+    F->>FS: 儲存音訊檔案至 static/uploads/
+    F->>M: Recording.create(標題, 檔案路徑, 時長)
+    M->>D: INSERT INTO recordings
+    D-->>M: recording_id
+    F->>M: Marker.create_batch(recording_id, 標記清單)
+    M->>D: INSERT INTO markers (批次)
+    F-->>B: 重導向至 /recordings/<id>
+    
+    B->>F: GET /recordings/<id>
+    F->>M: Recording.get(id) + Marker.get_by_recording(id)
+    M->>D: SELECT 查詢
+    D-->>M: 資料
+    M-->>F: Recording + Markers
+    F->>F: 渲染 detail.html（Jinja2）
+    F-->>B: HTML 頁面
+    B-->>U: 顯示錄音回顧頁面
 ```
 
 ---
 
 ## 4. 關鍵設計決策
 
-### 決策 1：使用 Application Factory 模式（`create_app`）
+### 決策 1：錄音在前端完成，後端只負責儲存
 
-**做法**：在 `app/__init__.py` 中建立 `create_app()` 工廠函式來初始化 Flask 應用。
+**決策：** 使用瀏覽器原生的 `MediaRecorder API` 在前端完成錄音，完成後才將音訊檔案上傳到後端。
 
-**原因**：
-- 將應用程式的建立邏輯集中管理
-- 方便切換不同環境的設定（開發 / 測試）
-- 這是 Flask 官方推薦的最佳實踐
+**原因：**
+- 即時錄音需要極低延遲，若將音訊串流即時傳送到後端會增加網路延遲與複雜度
+- 瀏覽器 `MediaRecorder API` 已提供穩定的錄音功能，無需後端介入
+- 後端只需處理檔案儲存與後設資料管理，職責更單純
 
+**取捨：**
+- 長時間錄音可能受限於瀏覽器記憶體（4 小時上限需測試驗證）
+- 若瀏覽器意外關閉，未儲存的錄音將遺失
+
+---
+
+### 決策 2：標記先暫存在前端，隨錄音一併上傳
+
+**決策：** 使用者在錄音過程中的所有標記操作，先暫存於前端 JavaScript 陣列中，待錄音停止並儲存時，與音訊檔案一起上傳至後端。
+
+**原因：**
+- 避免錄音過程中頻繁發送 HTTP 請求，影響錄音穩定性
+- 標記資料量小（JSON 陣列），與音訊檔案一起上傳不會增加負擔
+- 簡化後端邏輯：一次請求完成「儲存錄音 + 儲存所有標記」
+
+**取捨：**
+- 若瀏覽器意外關閉，暫存的標記也會遺失（可考慮未來版本加入 `localStorage` 備份）
+
+---
+
+### 決策 3：前端 JavaScript 模組化拆分
+
+**決策：** 將前端 JavaScript 按功能拆分為 5 個獨立模組（`recorder.js`、`waveform.js`、`timer.js`、`marker.js`、`keyboard.js`）。
+
+**原因：**
+- 錄音主頁面的前端邏輯較複雜（音訊處理 + 波形繪製 + 計時器 + 標記 + 快捷鍵），若全部寫在一個檔案中會難以維護
+- 拆分後每位團隊成員可以獨立負責不同模組，降低合併衝突
+- 每個模組職責單一，方便測試與除錯
+
+**模組間溝通方式：**
+- 使用全域事件（`CustomEvent`）或共享狀態物件進行模組間通訊
+- 例如：`recorder.js` 發出 `recording-started` 事件 → `timer.js` 和 `waveform.js` 接收並開始運作
+
+---
+
+### 決策 4：使用 Flask Blueprint 組織路由
+
+**決策：** 每個功能模組的路由使用獨立的 `Blueprint` 註冊，而非全部寫在一個檔案中。
+
+**原因：**
+- 路由分散在 `main.py`、`recording.py`、`marker.py`、`api.py`，各自負責不同功能
+- 團隊成員可以平行開發不同路由檔案，減少 Git 合併衝突
+- 未來擴充新功能時，只需新增 Blueprint，不影響既有程式碼
+
+**註冊方式：**
 ```python
-# app/__init__.py 範例
-def create_app():
-    app = Flask(__name__)
-    app.config.from_object('config')
-    # 註冊 Blueprint、初始化資料庫...
-    return app
+# app/__init__.py
+from app.routes.main import main_bp
+from app.routes.recording import recording_bp
+from app.routes.marker import marker_bp
+from app.routes.api import api_bp
+
+app.register_blueprint(main_bp)
+app.register_blueprint(recording_bp)
+app.register_blueprint(marker_bp)
+app.register_blueprint(api_bp, url_prefix='/api')
 ```
 
 ---
 
-### 決策 2：使用 Blueprint 組織路由
+### 決策 5：預留 RESTful API 層為未來整合做準備
 
-**做法**：每個功能模組（交易、提醒、模板、統計）各自建立一個 Flask Blueprint。
+**決策：** 在 `routes/api.py` 中獨立設計 RESTful API 端點，與頁面路由分開。
 
-**原因**：
-- 避免所有路由擠在同一個檔案中，造成程式碼難以維護
-- 每個 Blueprint 可以獨立開發與測試
-- 團隊成員可以各自負責不同的 Blueprint，減少合併衝突
+**原因：**
+- PRD 明確要求與「語音轉寫」、「AI 摘要」、「訪談歷史管理」等系統整合
+- API 端點回傳 JSON，頁面路由回傳 HTML，兩者職責不同，應分開管理
+- 使用 `/api` URL 前綴統一命名，便於識別與日後加入權限驗證
 
-```python
-# app/routes/transaction.py 範例
-from flask import Blueprint
+**MVP 階段：** API 層先建立骨架，實際整合邏輯待外部系統就緒後再實作。
 
-transaction_bp = Blueprint('transaction', __name__)
+---
 
-@transaction_bp.route('/transactions')
-def list_transactions():
-    # ...
+## 5. 技術元件協作總覽
+
+```
+使用者操作          前端技術                   後端技術              資料儲存
+──────────       ─────────────            ──────────          ──────────
+開始錄音     →   MediaRecorder.start()
+看到波形     ←   AnalyserNode + Canvas
+點標記按鈕   →   JS 暫存至陣列
+看到計時     ←   setInterval + DOM
+停止錄音     →   MediaRecorder.stop()
+輸入標題     →   HTML Form
+點選儲存     →   fetch() POST           →  Flask Route       → SQLite + 檔案
+                                           ↓
+                                        Model.create()
+                                           ↓
+查看回顧     ←   HTML 頁面              ←  Jinja2 Template   ← SQLite 查詢
+點標記跳轉   →   Audio.currentTime = t
 ```
 
 ---
 
-### 決策 3：使用原生 `sqlite3` 而非 ORM
-
-**做法**：直接使用 Python 內建的 `sqlite3` 模組操作資料庫，不使用 SQLAlchemy 等 ORM。
-
-**原因**：
-- 減少學習成本，初學者可直接寫 SQL 語法
-- 減少外部套件依賴
-- 專案規模小（個人使用），ORM 的抽象層反而增加複雜度
-- 透過 Model 層封裝 SQL，仍然保持程式碼整潔
-
-```python
-# app/models/transaction.py 範例
-def get_all_transactions():
-    db = get_db()
-    return db.execute('SELECT * FROM transactions ORDER BY date DESC').fetchall()
-```
-
----
-
-### 決策 4：收入與支出合併為單一 `transactions` 資料表
-
-**做法**：不分開建立 `incomes` 和 `expenses` 兩張表，而是用一個 `type` 欄位（`income` / `expense`）區分。
-
-**原因**：
-- 簡化查詢邏輯：計算餘額只需一次查詢（SUM income - SUM expense）
-- 減少重複程式碼：新增/編輯/刪除共用同一套路由與模板
-- 交易列表頁面可以一次顯示所有紀錄，不需跨表合併
-
----
-
-### 決策 5：共用 `base.html` 模板與導覽列
-
-**做法**：建立 `base.html` 作為所有頁面的共用版面，包含導覽列、頁尾、CSS/JS 引入。各頁面透過 Jinja2 的 `{% extends "base.html" %}` 繼承。
-
-**原因**：
-- 確保全站視覺一致性
-- 修改導覽列或引入新的 CSS/JS 只需改一個檔案
-- 減少 HTML 重複程式碼
-
-```html
-<!-- app/templates/base.html 範例 -->
-<!DOCTYPE html>
-<html>
-<head>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
-    <nav><!-- 導覽列 --></nav>
-    {% block content %}{% endblock %}
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
-```
-
----
-
-## 5. 設定檔規劃
-
-```python
-# config.py
-import os
-
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-
-SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')
-DATABASE = os.path.join(BASE_DIR, 'instance', 'database.db')
-```
-
----
-
-## 6. 套件需求
-
-```
-# requirements.txt
-Flask==3.1.*
-```
-
-> **說明**：SQLite 與 Jinja2 為 Python / Flask 內建，無需額外安裝。Chart.js 透過 CDN 引入，不需 Python 套件。
-
----
-
-> **下一步**：待團隊確認架構文件後，進入 Flowchart（流程圖設計）階段。
+> **下一步：** 架構確認後，請進入流程圖設計階段（`/flowchart`），將使用者操作路徑視覺化。

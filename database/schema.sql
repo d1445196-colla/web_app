@@ -1,73 +1,70 @@
 -- ============================================
--- 個人記帳簿系統 — SQLite 資料庫建表語法
+-- 即時標記錄音系統 — 資料庫 Schema
+-- 資料庫引擎：SQLite
+-- 建立日期：2026-05-19
 -- ============================================
 
--- 分類表：儲存收入與支出的分類標籤
-CREATE TABLE IF NOT EXISTS categories (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT    NOT NULL,
-    type        TEXT    NOT NULL CHECK (type IN ('income', 'expense')),
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
-    UNIQUE(name, type)
-);
+-- 啟用外鍵約束（SQLite 預設不啟用）
+PRAGMA foreign_keys = ON;
 
--- 交易紀錄表：儲存所有收入與支出紀錄
-CREATE TABLE IF NOT EXISTS transactions (
+-- ============================================
+-- 1. marker_types（標記種類）
+-- 儲存系統預設與使用者自訂的標記種類
+-- ============================================
+CREATE TABLE IF NOT EXISTS marker_types (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    type        TEXT    NOT NULL CHECK (type IN ('income', 'expense')),
-    amount      REAL    NOT NULL CHECK (amount > 0),
-    category_id INTEGER NOT NULL,
-    date        TEXT    NOT NULL,
-    note        TEXT    DEFAULT '',
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
-    updated_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
-    FOREIGN KEY (category_id) REFERENCES categories(id)
-);
-
--- 繳費提醒表：儲存每月定期帳單提醒
-CREATE TABLE IF NOT EXISTS reminders (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT    NOT NULL,
-    amount      REAL    NOT NULL CHECK (amount > 0),
-    due_day     INTEGER NOT NULL CHECK (due_day BETWEEN 1 AND 31),
-    is_paid     TEXT    NOT NULL DEFAULT 'no' CHECK (is_paid IN ('yes', 'no')),
-    paid_date   TEXT    DEFAULT NULL,
-    note        TEXT    DEFAULT '',
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
-    updated_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
-);
-
--- 常用模板表：儲存常用交易模板，用於一鍵快速記帳
-CREATE TABLE IF NOT EXISTS templates (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT    NOT NULL,
-    type        TEXT    NOT NULL CHECK (type IN ('income', 'expense')),
-    amount      REAL    NOT NULL CHECK (amount > 0),
-    category_id INTEGER NOT NULL,
-    note        TEXT    DEFAULT '',
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
-    updated_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
-    FOREIGN KEY (category_id) REFERENCES categories(id)
+    name        TEXT    NOT NULL,                        -- 種類名稱（如「關鍵重點」）
+    color       TEXT    NOT NULL DEFAULT '#e94560',      -- 顯示顏色（HEX 色碼）
+    icon        TEXT    NOT NULL DEFAULT '🏷',           -- 圖示（Emoji）
+    is_default  INTEGER NOT NULL DEFAULT 0,              -- 是否為系統預設（1=是, 0=否）
+    sort_order  INTEGER NOT NULL DEFAULT 0,              -- 排序順序
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))  -- 建立時間
 );
 
 -- ============================================
--- 預設分類資料
+-- 2. recordings（錄音紀錄）
+-- 儲存每一次錄音的後設資料與檔案路徑
 -- ============================================
+CREATE TABLE IF NOT EXISTS recordings (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    title         TEXT    NOT NULL,                      -- 錄音標題
+    filepath      TEXT    NOT NULL,                      -- 音訊檔案相對路徑
+    duration_sec  INTEGER NOT NULL DEFAULT 0,            -- 錄音時長（秒）
+    category      TEXT,                                  -- 錄音分類（可為空）
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))  -- 建立時間
+);
 
--- 收入分類
-INSERT INTO categories (name, type) VALUES ('薪資', 'income');
-INSERT INTO categories (name, type) VALUES ('獎金', 'income');
-INSERT INTO categories (name, type) VALUES ('兼職', 'income');
-INSERT INTO categories (name, type) VALUES ('投資收益', 'income');
-INSERT INTO categories (name, type) VALUES ('其他收入', 'income');
+-- 建立索引：依建立時間排序查詢
+CREATE INDEX IF NOT EXISTS idx_recordings_created_at ON recordings(created_at);
 
--- 支出分類
-INSERT INTO categories (name, type) VALUES ('餐飲', 'expense');
-INSERT INTO categories (name, type) VALUES ('交通', 'expense');
-INSERT INTO categories (name, type) VALUES ('住宿', 'expense');
-INSERT INTO categories (name, type) VALUES ('娛樂', 'expense');
-INSERT INTO categories (name, type) VALUES ('日用品', 'expense');
-INSERT INTO categories (name, type) VALUES ('醫療', 'expense');
-INSERT INTO categories (name, type) VALUES ('教育', 'expense');
-INSERT INTO categories (name, type) VALUES ('訂閱服務', 'expense');
-INSERT INTO categories (name, type) VALUES ('其他支出', 'expense');
+-- ============================================
+-- 3. markers（標記）
+-- 儲存每個錄音中的時間標記與備註
+-- ============================================
+CREATE TABLE IF NOT EXISTS markers (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    recording_id   INTEGER NOT NULL,                     -- 所屬錄音 ID
+    type_id        INTEGER NOT NULL,                     -- 標記種類 ID
+    timestamp_sec  INTEGER NOT NULL,                     -- 標記時間戳（秒）
+    note           TEXT,                                 -- 備註（可為空）
+    created_at     TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),  -- 建立時間
+
+    FOREIGN KEY (recording_id) REFERENCES recordings(id) ON DELETE CASCADE,
+    FOREIGN KEY (type_id)      REFERENCES marker_types(id) ON DELETE RESTRICT
+);
+
+-- 建立索引：依錄音 ID 查詢標記
+CREATE INDEX IF NOT EXISTS idx_markers_recording_id ON markers(recording_id);
+-- 建立索引：依標記種類篩選
+CREATE INDEX IF NOT EXISTS idx_markers_type_id ON markers(type_id);
+
+-- ============================================
+-- 4. 預設資料（Seed Data）
+-- 系統預設的 5 種標記種類
+-- ============================================
+INSERT INTO marker_types (name, color, icon, is_default, sort_order) VALUES
+    ('關鍵重點', '#e94560', '🔑', 1, 1),
+    ('故事',     '#0f3460', '📖', 1, 2),
+    ('不清晰',   '#f39c12', '❓', 1, 3),
+    ('行動項目', '#2ecc71', '⚡', 1, 4),
+    ('靈感',     '#9b59b6', '💡', 1, 5);
