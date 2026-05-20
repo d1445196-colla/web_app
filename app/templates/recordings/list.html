@@ -1,14 +1,74 @@
 {% extends "base.html" %}
 
-{% block title %}錄音列表{% endblock %}
+{% block title %}歷史錄音列表{% endblock %}
 
 {% block content %}
-<!-- TODO: 實作錄音列表頁面 -->
-<!-- 包含以下區塊：
-    1. 搜尋欄（依標題或分類搜尋）
-    2. 錄音卡片列表
-       - 每張卡片顯示：標題、日期時間、時長、標記數量、分類
-       - 操作按鈕：查看詳情、刪除、下載
-    3. 空狀態提示（尚無錄音時顯示）
--->
+<div class="list-header">
+    <h1>歷史錄音紀錄</h1>
+    
+    <!-- 搜尋欄（依標題或分類搜尋） -->
+    <form action="{{ url_for('recording.list_recordings') }}" method="GET" class="search-form">
+        <div class="search-input-wrapper">
+            <i>🔍</i>
+            <input type="text" name="q" value="{{ query or '' }}" class="form-control search-control" placeholder="搜尋標題或分類...">
+        </div>
+        <button type="submit" class="btn btn-primary">搜尋</button>
+        {% if query %}
+        <a href="{{ url_for('recording.list_recordings') }}" class="btn btn-secondary">清除</a>
+        {% endif %}
+    </form>
+</div>
+
+<!-- 錄音卡片列表 -->
+<div class="recordings-grid">
+    {% for rec in recordings %}
+    <div class="recording-card">
+        <div>
+            <div class="card-top">
+                <h3 class="card-title">{{ rec.title }}</h3>
+                {% if rec.category %}
+                <span class="category-badge">{{ rec.category }}</span>
+                {% endif %}
+            </div>
+            
+            <div class="card-meta">
+                <div class="card-meta-item">
+                    <span>📅</span>
+                    <span>{{ rec.created_at }}</span>
+                </div>
+                <div class="card-meta-item">
+                    <span>⏱</span>
+                    <span>長度: {{ rec.duration_display }}</span>
+                </div>
+                <div class="card-meta-item">
+                    <span>🔑</span>
+                    <span>標記數量: {{ rec.marker_count }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card-actions">
+            <a href="{{ url_for('recording.detail', id=rec.id) }}" class="btn btn-primary">查看詳情</a>
+            <a href="{{ url_for('recording.download', id=rec.id) }}" class="btn btn-secondary" title="下載錄音檔">下載</a>
+            
+            <form action="{{ url_for('recording.delete', id=rec.id) }}" method="POST" style="flex: 1; display: flex;" onsubmit="return confirm('確定要刪除這筆錄音紀錄與實體音訊檔案嗎？此動作無法復原。');">
+                <button type="submit" class="btn btn-danger" style="width: 100%;">刪除</button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <!-- 空狀態提示（尚無錄音時顯示） -->
+    <div class="empty-state">
+        <i style="font-style: normal; font-size: 3rem;">📁</i>
+        <h2>沒有找到任何錄音紀錄</h2>
+        {% if query %}
+        <p>請嘗試使用其他關鍵字搜尋，或回到首頁進行錄音。</p>
+        <a href="{{ url_for('recording.list_recordings') }}" class="btn btn-secondary">返回列表</a>
+        {% else %}
+        <p>您目前還沒有建立任何錄音。請前往首頁開始您的第一筆錄音！</p>
+        <a href="{{ url_for('main.index') }}" class="btn btn-primary">開始錄音</a>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
 {% endblock %}

@@ -57,9 +57,9 @@ def init_db():
         with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
             db.executescript(f.read())
         db.commit()
-        print(f"✅ 資料庫初始化完成：{DATABASE_PATH}")
+        print(f"[OK] 資料庫初始化完成：{DATABASE_PATH}")
     except Exception as e:
-        print(f"❌ 資料庫初始化失敗：{e}")
+        print(f"[ERROR] 資料庫初始化失敗：{e}")
         raise
     finally:
         close_db(db)

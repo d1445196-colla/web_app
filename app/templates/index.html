@@ -3,23 +3,298 @@
 {% block title %}錄音{% endblock %}
 
 {% block content %}
-<!-- TODO: 實作錄音主頁面 -->
-<!-- 包含以下區塊：
-    1. 錄音計時器（頂部 HH:MM:SS）
-    2. 即時音量波形視覺化（畫面中央 Canvas）
-    3. 標記按鈕區（依 marker_types 動態產生）
-    4. 錄音控制按鈕（開始 / 暫停 / 停止）
-    5. 錄音儲存表單（停止後顯示）
--->
+<div class="recorder-container">
+    <!-- 錄音計時器 -->
+    <div class="timer-wrapper">
+        <div id="duration-timer" class="duration-timer">00:00:00</div>
+    </div>
+
+    <!-- 即時音量波形視覺化 -->
+    <div class="waveform-container">
+        <canvas id="waveform-canvas" class="waveform-canvas"></canvas>
+    </div>
+
+    <!-- 錄音控制按鈕 -->
+    <div class="controls-wrapper">
+        <button id="btn-record" class="control-btn record" title="開始錄音">🎙</button>
+        <button id="btn-pause" class="control-btn secondary-btn" style="display: none;" title="暫停錄音">⏸</button>
+        <button id="btn-stop" class="control-btn secondary-btn" style="display: none;" title="停止錄音">⏹</button>
+    </div>
+
+    <!-- 標記按鈕區 -->
+    <div class="markers-wrapper">
+        <div class="markers-title">即時重點標記</div>
+        <div class="markers-grid">
+            {% for mt in marker_types %}
+            <button class="marker-btn" data-type-id="{{ mt.id }}" style="border-bottom: 3px solid {{ mt.color }};" disabled>
+                <span class="icon">{{ mt.icon }}</span>
+                <span class="name">{{ mt.name }}</span>
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- 即時標記日誌 -->
+    <div class="live-markers-container">
+        <div class="live-markers-title">即時標記日誌 (數字鍵可快速標記)</div>
+        <div id="live-markers-log" class="live-markers-log">
+            <div class="empty-log-text">尚未新增任何時間標記</div>
+        </div>
+    </div>
+</div>
+
+<!-- 儲存錄音對話框 / Modal -->
+<div id="save-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h2>儲存錄音檔</h2>
+        <form id="save-recording-form">
+            <input type="hidden" name="duration_sec" id="form-duration-sec" value="0">
+            <input type="hidden" name="markers_json" id="form-markers-json" value="[]">
+            
+            <div class="form-group">
+                <label for="form-title">錄音標題</label>
+                <input type="text" name="title" id="form-title" class="form-control" placeholder="輸入錄音標題（預設為時間）">
+            </div>
+            
+            <div class="form-group">
+                <label for="form-category">分類標籤</label>
+                <input type="text" name="category" id="form-category" class="form-control" placeholder="例如：會議、課堂、訪談">
+            </div>
+            
+            <div class="modal-actions">
+                <button type="button" id="btn-discard" class="btn btn-secondary">捨棄錄音</button>
+                <button type="submit" class="btn btn-primary">儲存</button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
-<!-- TODO: 引入前端 JS 模組 -->
-<!--
-<script src="{{ url_for('static', filename='js/recorder.js') }}"></script>
-<script src="{{ url_for('static', filename='js/waveform.js') }}"></script>
+<!-- 引入前端 JS 模組 -->
 <script src="{{ url_for('static', filename='js/timer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/waveform.js') }}"></script>
+<script src="{{ url_for('static', filename='js/recorder.js') }}"></script>
 <script src="{{ url_for('static', filename='js/marker.js') }}"></script>
 <script src="{{ url_for('static', filename='js/keyboard.js') }}"></script>
--->
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const timer = new RecordingTimer('duration-timer');
+        const visualizer = new WaveformVisualizer('waveform-canvas');
+        const recorder = new AudioRecorder();
+        const markerTracker = new MarkerTracker();
+
+        // 傳送標記種類資料至 JS
+        const markerTypesList = [
+            {% for mt in marker_types %}
+            { id: {{ mt.id }}, name: "{{ mt.name }}", icon: "{{ mt.icon }}", color: "{{ mt.color }}" },
+            {% endfor %}
+        ];
+        markerTracker.setMarkerTypes(markerTypesList);
+
+        // 綁定 DOM 元素
+        const btnRecord = document.getElementById('btn-record');
+        const btnPause = document.getElementById('btn-pause');
+        const btnStop = document.getElementById('btn-stop');
+        const markerButtons = document.querySelectorAll('.marker-btn');
+        const saveModal = document.getElementById('save-modal');
+        const btnDiscard = document.getElementById('btn-discard');
+        const saveForm = document.getElementById('save-recording-form');
+        
+        let currentAudioBlob = null;
+
+        // 預設畫出靜態水平線
+        visualizer.drawIdle();
+
+        // 錄音事件處理
+        recorder.onStart = (stream) => {
+            visualizer.init(stream);
+            visualizer.start();
+            timer.start();
+            
+            // 啟用標記按鈕
+            markerButtons.forEach(btn => btn.disabled = false);
+            
+            // 切換按鈕狀態
+            btnRecord.style.display = 'none';
+            btnPause.style.display = 'inline-flex';
+            btnStop.style.display = 'inline-flex';
+            btnPause.innerHTML = '⏸';
+            btnPause.title = '暫停錄音';
+        };
+
+        recorder.onPause = () => {
+            visualizer.pause();
+            timer.pause();
+            btnPause.innerHTML = '▶';
+            btnPause.title = '繼續錄音';
+        };
+
+        recorder.onResume = () => {
+            visualizer.resume();
+            timer.resume();
+            btnPause.innerHTML = '⏸';
+            btnPause.title = '暫停錄音';
+        };
+
+        recorder.onStop = (blob) => {
+            visualizer.stop();
+            timer.stop();
+            
+            currentAudioBlob = blob;
+            
+            // 填寫預設表單資訊
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const date = String(now.getDate()).padStart(2, '0');
+            const hr = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            
+            document.getElementById('form-title').value = `錄音_${year}${month}${date}_${hr}${min}`;
+            document.getElementById('form-duration-sec').value = timer.getSeconds();
+            document.getElementById('form-markers-json').value = markerTracker.toJSON();
+            
+            // 顯示 Modal
+            saveModal.classList.add('active');
+        };
+
+        recorder.onError = (err) => {
+            alert('錄音系統發生錯誤：' + (err.message || err));
+            resetUI();
+        };
+
+        // 按鈕點擊事件
+        btnRecord.addEventListener('click', () => {
+            markerTracker.clear();
+            recorder.start().catch(err => {
+                // 已有處理，此處忽略
+            });
+        });
+
+        btnPause.addEventListener('click', () => {
+            if (recorder.state === 'recording') {
+                recorder.pause();
+            } else if (recorder.state === 'paused') {
+                recorder.resume();
+            }
+        });
+
+        btnStop.addEventListener('click', () => {
+            recorder.stop();
+        });
+
+        // 點擊標記按鈕
+        markerButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const typeId = btn.getAttribute('data-type-id');
+                const timestamp = timer.getSeconds();
+                
+                // 播放短暫觸覺/視覺回饋
+                btn.style.transform = 'scale(0.95)';
+                setTimeout(() => btn.style.transform = '', 100);
+                
+                // 提示可選輸入備註 (非阻塞式，透過 prompt，或也可以在日誌中點擊✏️)
+                const note = prompt('請輸入標記備註（可留空）：', '');
+                markerTracker.addMarker(typeId, timestamp, note || '');
+            });
+        });
+
+        // 捨棄錄音
+        btnDiscard.addEventListener('click', () => {
+            if (confirm('確定要捨棄本次錄音嗎？此動作無法復原。')) {
+                saveModal.classList.remove('active');
+                resetUI();
+            }
+        });
+
+        // 表單送出 (透過 fetch 上傳 FormData)
+        saveForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!currentAudioBlob) {
+                alert('無錄音資料可儲存！');
+                return;
+            }
+            
+            const formData = new FormData(saveForm);
+            formData.append('audio_file', currentAudioBlob, 'recording.webm');
+            
+            const submitBtn = saveForm.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '儲存中...';
+            
+            try {
+                const response = await fetch("{{ url_for('recording.create') }}", {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                    } else {
+                        window.location.href = "{{ url_for('recording.list_recordings') }}";
+                    }
+                } else {
+                    alert('儲存失敗，請重試！');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '儲存';
+                }
+            } catch (err) {
+                console.error('上傳失敗:', err);
+                alert('連線失敗，請重試！');
+                submitBtn.disabled = false;
+                submitBtn.textContent = '儲存';
+            }
+        });
+
+        function resetUI() {
+            timer.reset();
+            visualizer.stop();
+            visualizer.drawIdle();
+            markerTracker.clear();
+            currentAudioBlob = null;
+            
+            btnRecord.style.display = 'inline-flex';
+            btnPause.style.display = 'none';
+            btnStop.style.display = 'none';
+            
+            markerButtons.forEach(btn => btn.disabled = true);
+        }
+
+        // 初始化鍵盤快捷鍵管理
+        const shortcutManager = new KeyboardShortcutManager({
+            onSpace: () => {
+                if (recorder.state === 'recording') {
+                    recorder.pause();
+                } else if (recorder.state === 'paused') {
+                    recorder.resume();
+                } else if (recorder.state === 'inactive') {
+                    btnRecord.click();
+                }
+            },
+            onNumber: (num) => {
+                if (recorder.state !== 'recording' && recorder.state !== 'paused') return;
+                
+                // num 點擊對應 index 的標記按鈕 (1-based index)
+                const targetBtn = markerButtons[num - 1];
+                if (targetBtn) {
+                    targetBtn.click();
+                }
+            }
+        });
+
+        // 當儲存 Modal 開啟時，停用鍵盤快捷鍵，以免使用者輸入時誤觸
+        const observer = new MutationObserver(() => {
+            if (saveModal.classList.contains('active')) {
+                shortcutManager.disable();
+            } else {
+                shortcutManager.enable();
+            }
+        });
+        observer.observe(saveModal, { attributes: true, attributeFilter: ['class'] });
+    });
+</script>
 {% endblock %}
