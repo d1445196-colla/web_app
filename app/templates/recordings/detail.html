@@ -1,17 +1,216 @@
 {% extends "base.html" %}
 
-{% block title %}{{ recording.title }} — 錄音詳情{% endblock %}
+{% block title %}{{ recording.title }} — 錄音詳情與回顧{% endblock %}
 
 {% block content %}
-<!-- TODO: 實作錄音詳情 / 回顧頁面 -->
-<!-- 包含以下區塊：
-    1. 錄音資訊（標題、日期、時長、分類）
-    2. 音訊播放器（HTML5 audio）
-    3. 標記清單
-       - 每個標記：時間戳（可點選跳轉）、種類圖示、備註
-       - 依種類篩選功能
-       - 編輯備註 / 刪除標記按鈕
-    4. 編輯錄音表單（修改標題 / 分類）
-    5. 刪除錄音按鈕（需二次確認）
--->
+<div class="detail-container">
+    
+    <!-- 左側：音訊播放器與錄音管理 -->
+    <div class="player-panel">
+        <div class="player-header">
+            <div class="player-title-section">
+                <h1>{{ recording.title }}</h1>
+                <div class="player-meta">
+                    <span>📅 {{ recording.created_at }}</span>
+                    <span>⏱ 長度: {{ recording.duration_display }}</span>
+                    {% if recording.category %}
+                    <span class="category-badge">{{ recording.category }}</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 音訊播放器與視覺化時間軸 -->
+        <div class="custom-audio-wrapper">
+            <audio id="audio-player" src="{{ url_for('static', filename=recording.filepath) }}" controls></audio>
+            
+            <!-- 互動式標記時間線 -->
+            <div class="marker-timeline-wrapper" id="timeline-container">
+                <div class="timeline-progress" id="timeline-progress"></div>
+                
+                <!-- 遍歷標記，依時間百分比放置旗標 -->
+                {% for m in markers %}
+                {% set pct = (m.timestamp_sec / recording.duration_sec * 100) if recording.duration_sec > 0 else 0 %}
+                <div class="timeline-flag" 
+                     style="left: {{ pct }}%; color: {{ m.type.color }};" 
+                     data-time="{{ m.timestamp_sec }}" 
+                     title="[{{ m.type.icon }} {{ m.type.name }}] - {{ m.note or '無備註' }}"
+                     onclick="jumpToTime({{ m.timestamp_sec }})">
+                    {{ m.type.icon }}
+                </div>
+                {% endfor %}
+            </div>
+            
+            <!-- 播放速度控制與下載 -->
+            <div class="player-controls">
+                <div class="speed-control">
+                    <span>播放速度:</span>
+                    <button class="speed-btn active" data-speed="1">1.0x</button>
+                    <button class="speed-btn" data-speed="1.25">1.25x</button>
+                    <button class="speed-btn" data-speed="1.5">1.5x</button>
+                    <button class="speed-btn" data-speed="2">2.0x</button>
+                </div>
+                <a href="{{ url_for('recording.download', id=recording.id) }}" class="btn btn-secondary">
+                    <span>📥 下載音訊檔</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- 編輯錄音資料與刪除錄音 -->
+        <div class="panel" style="margin-top: 1rem;">
+            <h3>編輯錄音資訊</h3>
+            <form action="{{ url_for('recording.update', id=recording.id) }}" method="POST" style="display: flex; flex-direction: column; gap: 1rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="edit-title">修改標題</label>
+                    <input type="text" name="title" id="edit-title" class="form-control" value="{{ recording.title }}" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="edit-category">修改分類</label>
+                    <input type="text" name="category" id="edit-category" class="form-control" value="{{ recording.category or '' }}" placeholder="無分類">
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 0.5rem;">
+                    <button type="submit" class="btn btn-primary">儲存變更</button>
+                    
+                    <button type="button" class="btn btn-danger" onclick="confirmDeleteRecording()">刪除錄音</button>
+                </div>
+            </form>
+            
+            <form id="delete-recording-form" action="{{ url_for('recording.delete', id=recording.id) }}" method="POST" style="display: none;"></form>
+        </div>
+    </div>
+
+    <!-- 右側：標記清單側邊欄 -->
+    <div class="markers-sidebar">
+        <div class="sidebar-title">
+            <span>標記回顧 ({{ markers|length }} 個)</span>
+            <select id="marker-filter" class="form-control" style="width: auto; padding: 0.25rem 0.5rem; font-size: 0.85rem;">
+                <option value="all">顯示所有種類</option>
+                {% for mt in marker_types %}
+                <option value="type-{{ mt.id }}">{{ mt.icon }} {{ mt.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="markers-list" id="markers-list">
+            {% for m in markers %}
+            <div class="marker-item" data-type-id="type-{{ m.type_id }}">
+                <div class="marker-item-top">
+                    <!-- 點選時間戳可跳轉 -->
+                    <span class="marker-time-tag" onclick="jumpToTime({{ m.timestamp_sec }})">
+                        ⏱ {{ m.timestamp_sec|int }}秒
+                    </span>
+                    <span class="marker-type-info" style="color: {{ m.type.color }};">
+                        <span>{{ m.type.icon }}</span>
+                        <span>{{ m.type.name }}</span>
+                    </span>
+                </div>
+                
+                <div class="marker-note-container" style="margin-top: 0.25rem;">
+                    <p class="marker-note" id="note-text-{{ m.id }}">{{ m.note or '（無備註）' }}</p>
+                    
+                    <!-- 行內編輯表單 -->
+                    <form id="note-form-{{ m.id }}" action="{{ url_for('marker.update_marker', id=m.id) }}" method="POST" style="display: none; margin-top: 0.5rem;">
+                        <input type="text" name="note" value="{{ m.note or '' }}" class="form-control" style="font-size: 0.85rem; padding: 0.4rem; margin-bottom: 0.4rem;" required>
+                        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                            <button type="submit" class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">確定</button>
+                            <button type="button" class="btn btn-secondary" onclick="toggleEditNote({{ m.id }})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">取消</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="marker-actions-bar">
+                    <button class="marker-action-link edit" onclick="toggleEditNote({{ m.id }})">編輯備註</button>
+                    <form action="{{ url_for('marker.delete_marker', id=m.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('確定要刪除這個時間標記嗎？');">
+                        <button type="submit" class="marker-action-link">刪除標記</button>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-log-text">此錄音檔無任何標記</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const audio = document.getElementById('audio-player');
+    const timelineProgress = document.getElementById('timeline-progress');
+    const timelineContainer = document.getElementById('timeline-container');
+    const markerFilter = document.getElementById('marker-filter');
+    const markerItems = document.querySelectorAll('.marker-item');
+
+    // 1. 點擊旗標或時間標籤跳轉
+    function jumpToTime(seconds) {
+        audio.currentTime = seconds;
+        audio.play();
+    }
+
+    // 2. 更新時間軸播放進度
+    audio.addEventListener('timeupdate', () => {
+        if (audio.duration) {
+            const pct = (audio.currentTime / audio.duration) * 100;
+            timelineProgress.style.width = pct + '%';
+        }
+    });
+
+    // 3. 點擊時間線跳轉播放器時間
+    timelineContainer.addEventListener('click', (e) => {
+        // 如果點擊的是 timeline-flag，就不重複觸發
+        if (e.target.classList.contains('timeline-flag')) return;
+        
+        const rect = timelineContainer.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const pct = clickX / rect.width;
+        if (audio.duration) {
+            audio.currentTime = pct * audio.duration;
+            audio.play();
+        }
+    });
+
+    // 4. 播放速度控制
+    const speedButtons = document.querySelectorAll('.speed-btn');
+    speedButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            speedButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const speed = parseFloat(btn.getAttribute('data-speed'));
+            audio.playbackRate = speed;
+        });
+    });
+
+    // 5. 標記種類過濾功能
+    markerFilter.addEventListener('change', () => {
+        const filterVal = markerFilter.value;
+        markerItems.forEach(item => {
+            if (filterVal === 'all' || item.getAttribute('data-type-id') === filterVal) {
+                item.style.display = 'flex';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    });
+
+    // 6. 行內編輯備註切換
+    function toggleEditNote(markerId) {
+        const textSpan = document.getElementById(`note-text-${markerId}`);
+        const editForm = document.getElementById(`note-form-${markerId}`);
+        
+        if (editForm.style.display === 'none') {
+            editForm.style.display = 'block';
+            textSpan.style.display = 'none';
+        } else {
+            editForm.style.display = 'none';
+            textSpan.style.display = 'block';
+        }
+    }
+
+    // 7. 刪除錄音二次確認
+    function confirmDeleteRecording() {
+        if (confirm('確定要刪除這筆錄音紀錄與實體檔案嗎？此動作將連同所有標記一起永久刪除且無法復原。')) {
+            document.getElementById('delete-recording-form').submit();
+        }
+    }
+</script>
 {% endblock %}

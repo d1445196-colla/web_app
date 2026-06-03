@@ -2,6 +2,7 @@
 # 主頁路由 Blueprint — 錄音主頁面
 
 from flask import Blueprint, render_template
+from app.models.marker_type import MarkerType
 
 main_bp = Blueprint('main', __name__)
 
@@ -22,5 +23,6 @@ def index():
 
     Template: templates/index.html
     """
-    # TODO: 實作
-    pass
+    marker_types = MarkerType.get_all()
+    return render_template('index.html', marker_types=marker_types)
+
