@@ -3,16 +3,124 @@
 {% block title %}標記種類管理{% endblock %}
 
 {% block content %}
-<!-- TODO: 實作標記種類管理頁面 -->
-<!-- 包含以下區塊：
-    1. 新增標記種類表單
-       - 名稱輸入框
-       - 顏色選擇器（color input）
-       - 圖示輸入框（Emoji）
-    2. 現有標記種類列表
-       - 每個種類：圖示、名稱、顏色預覽、使用次數
-       - 編輯按鈕（展開行內編輯表單）
-       - 刪除按鈕（需確認；有引用時顯示警告）
-       - 預設種類標記（不建議刪除）
--->
+<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem;">
+    <!-- 左側：新增標記種類表單 -->
+    <div style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 16px; padding: 1.5rem; height: fit-content;">
+        <h2 style="margin-bottom: 1.5rem;">🆕 新增標記種類</h2>
+        <form action="{{ url_for('marker.create_marker_type') }}" method="POST">
+            <div class="form-group">
+                <label for="name">種類名稱</label>
+                <input type="text" class="form-control" id="name" name="name" required placeholder="例如：靈感、待辦事項">
+            </div>
+            
+            <div class="form-group">
+                <label for="icon">圖示 (單個 Emoji)</label>
+                <input type="text" class="form-control" id="icon" name="icon" required placeholder="例如：💡、🚀、⭐" value="🏷">
+            </div>
+
+            <div class="form-group">
+                <label for="color">代表顏色</label>
+                <input type="color" class="form-control" id="color" name="color" value="#e94560" style="padding: 0.2rem; height: 42px;">
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">建立標記種類</button>
+        </form>
+    </div>
+
+    <!-- 右側：已存在的種類列表 -->
+    <div style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 16px; padding: 1.5rem;">
+        <h2 style="margin-bottom: 1.5rem;">⚙ 標記種類列表</h2>
+        
+        <table style="width: 100%; border-collapse: collapse; text-align: left;" class="marker-types-table">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.9rem;">
+                    <th style="padding: 0.75rem;">圖示</th>
+                    <th style="padding: 0.75rem;">名稱</th>
+                    <th style="padding: 0.75rem;">代表顏色</th>
+                    <th style="padding: 0.75rem; text-align: center;">已使用次數</th>
+                    <th style="padding: 0.75rem; text-align: right;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in marker_types %}
+                    {% set mt = item.type %}
+                    <!-- 檢視模式行 -->
+                    <tr id="row-view-{{ mt.id }}" style="border-bottom: 1px solid rgba(255,255,255,0.03); vertical-align: middle;">
+                        <td style="padding: 1rem 0.75rem; font-size: 1.5rem;">{{ mt.icon }}</td>
+                        <td style="padding: 1rem 0.75rem; font-weight: 600;">{{ mt.name }}</td>
+                        <td style="padding: 1rem 0.75rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="display: inline-block; width: 14px; height: 14px; border-radius: 50%; background-color: {{ mt.color }}; border: 1px solid rgba(255,255,255,0.2);"></span>
+                                <code style="font-size: 0.85rem; color: var(--text-secondary);">{{ mt.color }}</code>
+                            </div>
+                        </td>
+                        <td style="padding: 1rem 0.75rem; text-align: center;">
+                            <span class="category-badge" style="background-color: var(--secondary)15; color: var(--secondary);">{{ item.usage_count }}</span>
+                        </td>
+                        <td style="padding: 1rem 0.75rem; text-align: right;">
+                            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                                <button type="button" class="btn btn-secondary btn-edit-type" data-id="{{ mt.id }}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">編輯</button>
+                                {% if not mt.is_default %}
+                                <form action="{{ url_for('marker.delete_marker_type', id=mt.id) }}" method="POST" onsubmit="return confirm('確定要刪除此標記種類嗎？刪除後無法復原。');" style="display: inline;">
+                                    <button type="submit" class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">刪除</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    
+                    <!-- 內聯編輯模式行 (預設隱藏) -->
+                    <tr id="row-edit-{{ mt.id }}" style="border-bottom: 1px solid var(--primary)30; background-color: rgba(255,255,255,0.01); display: none; vertical-align: middle;">
+                        <td colspan="5" style="padding: 1rem;">
+                            <form action="{{ url_for('marker.update_marker_type', id=mt.id) }}" method="POST" style="display: flex; gap: 1rem; align-items: center; width: 100%;">
+                                <div style="width: 80px;">
+                                    <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.2rem;">圖示</label>
+                                    <input type="text" class="form-control" name="icon" value="{{ mt.icon }}" required style="padding: 0.4rem; text-align: center;">
+                                </div>
+                                <div style="flex: 2;">
+                                    <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.2rem;">名稱</label>
+                                    <input type="text" class="form-control" name="name" value="{{ mt.name }}" required style="padding: 0.4rem;">
+                                </div>
+                                <div style="width: 100px;">
+                                    <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.2rem;">代表色</label>
+                                    <input type="color" class="form-control" name="color" value="{{ mt.color }}" style="padding: 0.1rem; height: 35px;">
+                                </div>
+                                <div style="display: flex; gap: 0.5rem; margin-top: 1.2rem; margin-left: auto;">
+                                    <button type="button" class="btn btn-secondary btn-cancel-type-edit" data-id="{{ mt.id }}" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">取消</button>
+                                    <button type="submit" class="btn btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">儲存</button>
+                                </div>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 切換到編輯模式
+        document.querySelectorAll('.btn-edit-type').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                document.getElementById(`row-view-${id}`).style.display = 'none';
+                
+                // 表格中的 tr block 顯示要用 table-row
+                document.getElementById(`row-edit-${id}`).style.display = 'table-row';
+            });
+        });
+
+        // 取消編輯
+        document.querySelectorAll('.btn-cancel-type-edit').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                document.getElementById(`row-view-${id}`).style.display = 'table-row';
+                document.getElementById(`row-edit-${id}`).style.display = 'none';
+            });
+        });
+    });
+</script>
 {% endblock %}

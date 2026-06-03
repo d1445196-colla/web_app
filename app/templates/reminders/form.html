@@ -1,3 +1,62 @@
-<!-- app/templates/reminders/form.html — 新增/編輯提醒表單（待實作） -->
-<!-- 繼承：base.html -->
-<!-- 內容：提醒表單（帳單名稱、金額、到期日、備註），新增與編輯共用 -->
+{% extends "base.html" %}
+
+{% block title %}
+    {% if reminder %}編輯繳費提醒 - {{ reminder.name }}{% else %}新增繳費提醒{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .form-container {
+        max-width: 550px;
+        margin: 0 auto;
+        background: var(--bg-panel);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 2.5rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <h2 style="margin-bottom: 2rem; font-family: 'Outfit', sans-serif;">
+        {% if reminder %}✏ 編輯繳費提醒{% else %}🔔 新增繳費提醒{% endif %}
+    </h2>
+    
+    <form action="{% if reminder %}{{ url_for('reminder.edit_reminder', id=reminder.id) }}{% else %}{{ url_for('reminder.create_reminder') }}{% endif %}" method="POST">
+        <!-- 帳單名稱 -->
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label for="name">帳單名稱</label>
+            <input type="text" class="form-control" id="name" name="name" required 
+                   placeholder="例如：房屋租金、電信費、水電費" value="{{ reminder.name if reminder else '' }}">
+        </div>
+
+        <!-- 應繳金額 -->
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label for="amount">應繳金額</label>
+            <input type="number" class="form-control" id="amount" name="amount" min="1" step="any" required 
+                   placeholder="請輸入扣款金額" value="{{ reminder.amount if reminder else '' }}">
+        </div>
+
+        <!-- 每月扣款日 -->
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label for="due_day">每月扣款日 (1–31 日)</label>
+            <input type="number" class="form-control" id="due_day" name="due_day" min="1" max="31" required 
+                   placeholder="例如：5" value="{{ reminder.due_day if reminder else '' }}">
+        </div>
+
+        <!-- 備註 -->
+        <div class="form-group" style="margin-bottom: 2rem;">
+            <label for="note">帳單備註 (選填)</label>
+            <textarea class="form-control" id="note" name="note" rows="3" placeholder="例如：自動轉帳、至超商繳費..." style="resize: vertical;">{{ reminder.note if reminder else '' }}</textarea>
+        </div>
+
+        <!-- 按鈕 -->
+        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+            <a href="{{ url_for('reminder.list_reminders') }}" class="btn btn-secondary">取消</a>
+            <button type="submit" class="btn btn-primary">儲存提醒設定</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

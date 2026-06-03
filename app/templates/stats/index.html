@@ -1,3 +1,181 @@
-<!-- app/templates/stats/index.html — 統計報表（待實作） -->
-<!-- 繼承：base.html -->
-<!-- 內容：收支趨勢圖表（使用 Chart.js），近 6 個月的收入/支出長條圖 -->
+{% extends "base.html" %}
+
+{% block title %}財務統計分析{% endblock %}
+
+{% block extra_head %}
+<!-- 載入 Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    .stats-dashboard {
+        display: grid;
+        grid-template-columns: 2fr 1.2fr;
+        gap: 2rem;
+    }
+    
+    @media (max-width: 900px) {
+        .stats-dashboard {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    .chart-panel {
+        background: var(--bg-panel);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 2rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    
+    .table-panel {
+        background: var(--bg-panel);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 2rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <div>
+        <h1 style="margin-bottom: 0.5rem; font-family: 'Outfit', sans-serif;">📊 財務統計分析</h1>
+        <p style="color: var(--text-secondary);">分析最近 6 個月的收支變化與存錢趨勢。</p>
+    </div>
+    <div>
+        <a href="{{ url_for('transaction.list_transactions') }}" class="btn btn-secondary">前往記帳明細</a>
+    </div>
+</div>
+
+<div class="stats-dashboard">
+    <!-- 左側：收支趨勢柱狀圖 -->
+    <div class="chart-panel">
+        <h2 style="margin-bottom: 1.5rem; font-weight: 600;">📈 收支趨勢圖表</h2>
+        <div style="position: relative; height: 350px; width: 100%;">
+            <canvas id="monthly-trend-chart"></canvas>
+        </div>
+    </div>
+
+    <!-- 右側：數據統計表 -->
+    <div class="table-panel">
+        <h2 style="margin-bottom: 1.5rem; font-weight: 600;">📋 月度收支總表</h2>
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; vertical-align: middle;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.85rem;">
+                        <th style="padding: 0.75rem 0.5rem;">月份</th>
+                        <th style="padding: 0.75rem 0.5rem; text-align: right;">收入</th>
+                        <th style="padding: 0.75rem 0.5rem; text-align: right;">支出</th>
+                        <th style="padding: 0.75rem 0.5rem; text-align: right;">結餘</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in monthly_data %}
+                        {% set net = item.income - item.expense %}
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.95rem;">
+                            <td style="padding: 0.85rem 0.5rem; font-family: monospace; font-weight: 600;">{{ item.label }}</td>
+                            <td style="padding: 0.85rem 0.5rem; text-align: right; color: var(--success); font-weight: 500;">
+                                ${{ "{:,.2f}".format(item.income) }}
+                            </td>
+                            <td style="padding: 0.85rem 0.5rem; text-align: right; color: var(--text-primary);">
+                                ${{ "{:,.2f}".format(item.expense) }}
+                            </td>
+                            <td style="padding: 0.85rem 0.5rem; text-align: right; font-weight: 700; color: {% if net >= 0 %}var(--secondary){% else %}var(--primary){% endif %};">
+                                ${{ "{:,.2f}".format(net) }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 從 Jinja2 解析變數並轉換為 JS 陣列
+        const rawData = {{ monthly_data|tojson }};
+        
+        const labels = rawData.map(item => item.label);
+        const incomeData = rawData.map(item => item.income);
+        const expenseData = rawData.map(item => item.expense);
+
+        const ctx = document.getElementById('monthly-trend-chart').getContext('2d');
+        
+        // 建立圖表
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '總收入 📈',
+                        data: incomeData,
+                        backgroundColor: '#10b981', // var(--success)
+                        borderColor: '#10b981',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        maxBarThickness: 30
+                    },
+                    {
+                        label: '總支出 📉',
+                        data: expenseData,
+                        backgroundColor: '#f43f5e', // var(--primary)
+                        borderColor: '#f43f5e',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        maxBarThickness: 30
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: '#94a3b8', // var(--text-secondary)
+                            font: {
+                                family: 'system-ui, sans-serif',
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        padding: 10,
+                        backgroundColor: '#12121a',
+                        titleColor: '#f1f5f9',
+                        bodyColor: '#f1f5f9',
+                        borderColor: 'rgba(255, 255, 255, 0.08)',
+                        borderWidth: 1
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.02)'
+                        },
+                        ticks: {
+                            color: '#94a3b8'
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.04)'
+                        },
+                        ticks: {
+                            color: '#94a3b8',
+                            callback: function(value) {
+                                return '$' + value;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

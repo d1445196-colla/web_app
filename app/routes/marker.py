@@ -1,7 +1,10 @@
 # app/routes/marker.py
 # 標記路由 Blueprint — 標記 CRUD + 標記種類管理
 
-from flask import Blueprint
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
+
+from app.models.marker import Marker
+from app.models.marker_type import MarkerType
 
 marker_bp = Blueprint('marker', __name__)
 
@@ -13,34 +16,29 @@ marker_bp = Blueprint('marker', __name__)
 @marker_bp.route('/markers/<int:id>/update', methods=['POST'])
 def update_marker(id):
     """更新標記備註。
-
-    輸入：
-        - URL 參數 id（標記 ID）
-        - request.form['note']：新備註
-
-    處理邏輯：Marker.update(id, note)
-    輸出：重導向至 /recordings/<recording_id>
-    錯誤：找不到標記 → 404
     """
-    # TODO: 實作
-    pass
+    marker = Marker.get_by_id(id)
+    if marker is None:
+        abort(404)
+
+    note = request.form.get('note', '').strip()
+    Marker.update(id, note=note)
+    flash('[OK] 標記備註已更新', 'success')
+    return redirect(url_for('recording.detail', id=marker.recording_id))
 
 
 @marker_bp.route('/markers/<int:id>/delete', methods=['POST'])
 def delete_marker(id):
     """刪除單一標記。
-
-    輸入：URL 參數 id（標記 ID）
-
-    處理邏輯：
-        1. Marker.get_by_id(id) 取得 recording_id
-        2. Marker.delete(id)
-
-    輸出：重導向至 /recordings/<recording_id>
-    錯誤：找不到標記 → 404
     """
-    # TODO: 實作
-    pass
+    marker = Marker.get_by_id(id)
+    if marker is None:
+        abort(404)
+
+    recording_id = marker.recording_id
+    Marker.delete(id)
+    flash('[OK] 標記已刪除', 'success')
+    return redirect(url_for('recording.detail', id=recording_id))
 
 
 # ============================================
@@ -50,60 +48,70 @@ def delete_marker(id):
 @marker_bp.route('/settings/markers', methods=['GET'])
 def list_marker_types():
     """標記種類列表頁面。
-
-    顯示所有標記種類，支援新增 / 編輯 / 刪除。
-
-    處理邏輯：
-        1. MarkerType.get_all()
-        2. 為每個種類取得 MarkerType.get_usage_count(id)
-
-    Template: templates/settings/marker_types.html
     """
-    # TODO: 實作
-    pass
+    marker_types = MarkerType.get_all()
+    # Build list of dicts with 'type' and 'usage_count' keys
+    marker_types_data = []
+    for mt in marker_types:
+        usage = MarkerType.get_usage_count(mt.id)
+        marker_types_data.append({
+            'type': mt,
+            'usage_count': usage
+        })
+
+    return render_template('settings/marker_types.html', marker_types=marker_types_data)
 
 
 @marker_bp.route('/settings/markers', methods=['POST'])
 def create_marker_type():
     """新增標記種類。
-
-    輸入：
-        - request.form['name']：種類名稱
-        - request.form['color']：顏色 HEX
-        - request.form['icon']：圖示 Emoji
-
-    處理邏輯：MarkerType.create(name, color, icon)
-    輸出：重導向至 /settings/markers
     """
-    # TODO: 實作
-    pass
+    name = request.form.get('name', '').strip()
+    color = request.form.get('color', '#e94560').strip()
+    icon = request.form.get('icon', '🏷').strip()
+
+    if not name:
+        flash('[ERROR] 名稱不可為空', 'danger')
+        return redirect(url_for('marker.list_marker_types'))
+
+    MarkerType.create(name=name, color=color, icon=icon)
+    flash('[OK] 標記種類已建立', 'success')
+    return redirect(url_for('marker.list_marker_types'))
 
 
 @marker_bp.route('/settings/markers/<int:id>/update', methods=['POST'])
 def update_marker_type(id):
     """更新標記種類。
-
-    輸入：
-        - URL 參數 id
-        - request.form['name']、request.form['color']、request.form['icon']
-
-    處理邏輯：MarkerType.update(id, name, color, icon)
-    輸出：重導向至 /settings/markers
-    錯誤：找不到種類 → 404
     """
-    # TODO: 實作
-    pass
+    mt = MarkerType.get_by_id(id)
+    if mt is None:
+        abort(404)
+
+    name = request.form.get('name', '').strip()
+    color = request.form.get('color', '').strip()
+    icon = request.form.get('icon', '').strip()
+
+    if not name:
+        flash('[ERROR] 名稱不可為空', 'danger')
+        return redirect(url_for('marker.list_marker_types'))
+
+    MarkerType.update(id, name=name, color=color if color else None, icon=icon if icon else None)
+    flash('[OK] 標記種類已更新', 'success')
+    return redirect(url_for('marker.list_marker_types'))
 
 
 @marker_bp.route('/settings/markers/<int:id>/delete', methods=['POST'])
 def delete_marker_type(id):
     """刪除標記種類。
-
-    輸入：URL 參數 id
-
-    處理邏輯：MarkerType.delete(id)
-    輸出：重導向至 /settings/markers
-    錯誤：找不到種類 → 404；仍有標記引用 → flash 錯誤訊息
     """
-    # TODO: 實作
-    pass
+    mt = MarkerType.get_by_id(id)
+    if mt is None:
+        abort(404)
+
+    success = MarkerType.delete(id)
+    if not success:
+        flash('[ERROR] 該標記種類已被使用，無法刪除', 'danger')
+    else:
+        flash('[OK] 標記種類已刪除', 'success')
+
+    return redirect(url_for('marker.list_marker_types'))

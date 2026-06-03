@@ -1,3 +1,84 @@
-<!-- app/templates/reminders/list.html — 繳費提醒列表（待實作） -->
-<!-- 繼承：base.html -->
-<!-- 內容：提醒列表表格，含標記已繳/編輯/刪除按鈕 -->
+{% extends "base.html" %}
+
+{% block title %}繳費提醒列表{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+        <h1 style="margin-bottom: 0.5rem; font-family: 'Outfit', sans-serif;">🔔 繳費提醒管理</h1>
+        <p style="color: var(--text-secondary);">設定每月定期帳單與繳費提醒，避免過期產生罰金。</p>
+    </div>
+    <div>
+        <a href="{{ url_for('reminder.create_reminder') }}" class="btn btn-primary">➕ 新增繳費提醒</a>
+    </div>
+</div>
+
+<div style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);">
+    <h2 style="margin-bottom: 1.5rem; font-weight: 600;">📋 本月定期繳費清單</h2>
+    
+    {% if reminders %}
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; vertical-align: middle;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.9rem;">
+                        <th style="padding: 1rem 0.75rem;">帳單名稱</th>
+                        <th style="padding: 1rem 0.75rem;">應繳金額</th>
+                        <th style="padding: 1rem 0.75rem;">每月扣款日</th>
+                        <th style="padding: 1rem 0.75rem;">狀態</th>
+                        <th style="padding: 1rem 0.75rem;">繳費日期</th>
+                        <th style="padding: 1rem 0.75rem; text-align: right;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rem in reminders %}
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding: 1rem 0.75rem;">
+                                <div style="font-weight: 600;">{{ rem.name }}</div>
+                                {% if rem.note %}
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.2rem;">{{ rem.note }}</div>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 1rem 0.75rem; font-family: 'Outfit', sans-serif; font-weight: 700;">
+                                ${{ "{:,.2f}".format(rem.amount) }}
+                            </td>
+                            <td style="padding: 1rem 0.75rem;">
+                                每月 <strong style="color: var(--secondary);">{{ rem.due_day }}</strong> 日
+                            </td>
+                            <td style="padding: 1rem 0.75rem;">
+                                {% if rem.is_paid == 'yes' %}
+                                    <span class="category-badge" style="background-color: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3);">已繳清</span>
+                                {% else %}
+                                    <span class="category-badge" style="background-color: rgba(245, 158, 11, 0.15); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3);">未繳費</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 1rem 0.75rem; font-family: monospace; color: var(--text-secondary);">
+                                {{ rem.paid_date or '--' }}
+                            </td>
+                            <td style="padding: 1rem 0.75rem; text-align: right;">
+                                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                                    {% if rem.is_paid == 'no' %}
+                                        <form action="{{ url_for('reminder.mark_paid', id=rem.id) }}" method="POST" style="display: inline;">
+                                            <button type="submit" class="btn btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background-color: var(--success); box-shadow: none;">標記已繳</button>
+                                        </form>
+                                    {% endif %}
+                                    <a href="{{ url_for('reminder.edit_reminder', id=rem.id) }}" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">編輯</a>
+                                    <form action="{{ url_for('reminder.delete_reminder', id=rem.id) }}" method="POST" onsubmit="return confirm('確定要刪除此筆繳費提醒嗎？');" style="display: inline;">
+                                        <button type="submit" class="btn btn-danger" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">刪除</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <span style="font-size: 3rem; margin-bottom: 1rem;">📅</span>
+            <h3>無任何繳費提醒</h3>
+            <p>目前尚無設定任何每月定期帳單。現在就建立一個提醒，幫助您準時繳款！</p>
+            <a href="{{ url_for('reminder.create_reminder') }}" class="btn btn-primary">手動設定提醒</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -112,3 +112,79 @@ CREATE TABLE IF NOT EXISTS transcription_markers (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tmarker_transcription_id ON transcription_markers(transcription_id);
+
+-- ============================================
+-- 【記帳系統】8. categories（分類）
+-- ============================================
+CREATE TABLE IF NOT EXISTS categories (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT    NOT NULL,
+    type        TEXT    NOT NULL CHECK(type IN ('income', 'expense')),
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+-- ============================================
+-- 【記帳系統】9. transactions（交易紀錄）
+-- ============================================
+CREATE TABLE IF NOT EXISTS transactions (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    type         TEXT    NOT NULL CHECK(type IN ('income', 'expense')),
+    amount       REAL    NOT NULL,
+    category_id  INTEGER NOT NULL,
+    date         TEXT    NOT NULL,
+    note         TEXT    NOT NULL DEFAULT '',
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at   TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
+
+-- ============================================
+-- 【記帳系統】10. reminders（繳費提醒）
+-- ============================================
+CREATE TABLE IF NOT EXISTS reminders (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT    NOT NULL,
+    amount      REAL    NOT NULL,
+    due_day     INTEGER NOT NULL,
+    is_paid     TEXT    NOT NULL DEFAULT 'no' CHECK(is_paid IN ('yes', 'no')),
+    paid_date   TEXT,
+    note        TEXT    NOT NULL DEFAULT '',
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+-- ============================================
+-- 【記帳系統】11. templates（常用模板）
+-- ============================================
+CREATE TABLE IF NOT EXISTS templates (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    name         TEXT    NOT NULL,
+    type         TEXT    NOT NULL CHECK(type IN ('income', 'expense')),
+    amount       REAL    NOT NULL,
+    category_id  INTEGER NOT NULL,
+    note         TEXT    NOT NULL DEFAULT '',
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at   TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT
+);
+
+-- ============================================
+-- 【記帳系統】12. 預設資料（Seed Data）
+-- ============================================
+INSERT OR IGNORE INTO categories (name, type) VALUES
+    ('薪水',     'income'),
+    ('獎金',     'income'),
+    ('投資收入', 'income'),
+    ('其他收入', 'income'),
+    ('餐飲',     'expense'),
+    ('交通',     'expense'),
+    ('住房',     'expense'),
+    ('娛樂',     'expense'),
+    ('購物',     'expense'),
+    ('醫療',     'expense'),
+    ('教育',     'expense'),
+    ('其他支出', 'expense');

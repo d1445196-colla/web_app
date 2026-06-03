@@ -3,23 +3,79 @@
 {% block title %}錄音{% endblock %}
 
 {% block content %}
-<!-- TODO: 實作錄音主頁面 -->
-<!-- 包含以下區塊：
-    1. 錄音計時器（頂部 HH:MM:SS）
-    2. 即時音量波形視覺化（畫面中央 Canvas）
-    3. 標記按鈕區（依 marker_types 動態產生）
-    4. 錄音控制按鈕（開始 / 暫停 / 停止）
-    5. 錄音儲存表單（停止後顯示）
--->
+<div class="recorder-container">
+    <!-- 頂部資訊與計時器 -->
+    <div class="timer-wrapper">
+        <div class="duration-timer" id="timer-display">00:00:00</div>
+        <p style="color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.9rem;" id="recording-status">準備就緒</p>
+    </div>
+
+    <!-- 波形視覺化 Canvas -->
+    <div class="waveform-container">
+        <canvas class="waveform-canvas" id="waveform"></canvas>
+    </div>
+
+    <!-- 錄音控制按鈕 -->
+    <div class="controls-wrapper">
+        <button id="pause-btn" class="control-btn secondary-btn" title="暫停/繼續 (空白鍵)" disabled>
+            <span>⏸</span>
+        </button>
+        <button id="start-btn" class="control-btn record" title="開始錄音">
+            <span>⏺</span>
+        </button>
+        <button id="stop-btn" class="control-btn secondary-btn" title="停止錄音" disabled>
+            <span>⏹</span>
+        </button>
+    </div>
+
+    <!-- 標記按鈕區 -->
+    <div class="markers-wrapper">
+        <div class="markers-title">即時標記重點 (鍵盤數字鍵 1-5)</div>
+        <div class="markers-grid">
+            {% for mt in marker_types %}
+            <button class="marker-btn" data-type-id="{{ mt.id }}" data-color="{{ mt.color }}" data-key="{{ loop.index }}" disabled>
+                <span class="icon">{{ mt.icon }}</span>
+                <span class="name">{{ mt.name }}</span>
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- 儲存錄音對話框 / Modal -->
+<div class="modal-overlay" id="save-modal">
+    <div class="modal-content">
+        <h3 style="margin-bottom: 1.5rem;">儲存錄音檔案</h3>
+        <form id="save-recording-form" method="POST" action="{{ url_for('recording.create') }}" enctype="multipart/form-data">
+            <input type="hidden" id="duration-sec-input" name="duration_sec" value="0">
+            <input type="hidden" id="markers-json-input" name="markers_json" value="[]">
+            
+            <!-- 用來放二進位錄音檔的 input -->
+            <input type="file" id="audio-file-input" name="audio_file" style="display: none;">
+
+            <div class="form-group">
+                <label for="title-input">錄音標題</label>
+                <input type="text" class="form-control" id="title-input" name="title" required placeholder="請輸入錄音標題">
+            </div>
+
+            <div class="form-group">
+                <label for="category-input">分類標籤</label>
+                <input type="text" class="form-control" id="category-input" name="category" placeholder="例如：會議、訪談、靈感">
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="discard-btn">放棄錄音</button>
+                <button type="submit" class="btn btn-primary">確認儲存</button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
-<!-- TODO: 引入前端 JS 模組 -->
-<!--
-<script src="{{ url_for('static', filename='js/recorder.js') }}"></script>
-<script src="{{ url_for('static', filename='js/waveform.js') }}"></script>
 <script src="{{ url_for('static', filename='js/timer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/waveform.js') }}"></script>
 <script src="{{ url_for('static', filename='js/marker.js') }}"></script>
+<script src="{{ url_for('static', filename='js/recorder.js') }}"></script>
 <script src="{{ url_for('static', filename='js/keyboard.js') }}"></script>
--->
 {% endblock %}

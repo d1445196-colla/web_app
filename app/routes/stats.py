@@ -1,12 +1,9 @@
-"""
-app/routes/stats.py
-統計報表路由
-
-Blueprint: stats_bp
-負責收支趨勢圖表與統計資料。
-"""
+# app/routes/stats.py
+# 統計報表路由
 
 from flask import Blueprint, render_template
+from datetime import datetime
+from app.models import transaction
 
 stats_bp = Blueprint('stats', __name__)
 
@@ -25,4 +22,22 @@ def index():
 
     輸出：渲染 stats/index.html，傳入 monthly_data
     """
-    pass
+    months = []
+    now = datetime.now()
+    
+    # 計算最近 6 個月 (包含當月)
+    for i in range(5, -1, -1):
+        year = now.year
+        month = now.month - i
+        while month <= 0:
+            month += 12
+            year -= 1
+            
+        summary = transaction.get_monthly_summary(year, month)
+        months.append({
+            'label': f'{year}-{month:02d}',
+            'income': summary['income'],
+            'expense': summary['expense']
+        })
+        
+    return render_template('stats/index.html', monthly_data=months)

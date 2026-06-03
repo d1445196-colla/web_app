@@ -1,3 +1,89 @@
-<!-- app/templates/templates/list.html — 常用模板列表（待實作） -->
-<!-- 繼承：base.html -->
-<!-- 內容：模板列表，含套用/編輯/刪除按鈕 -->
+{% extends "base.html" %}
+
+{% block title %}常用記帳模板{% endblock %}
+
+{% block extra_head %}
+<style>
+    .template-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .template-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: all 0.2s ease;
+        backdrop-filter: blur(var(--glass-blur));
+    }
+    
+    .template-card:hover {
+        transform: translateY(-3px);
+        border-color: rgba(255, 255, 255, 0.15);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+        <h1 style="margin-bottom: 0.5rem; font-family: 'Outfit', sans-serif;">⚡ 常用記帳模板</h1>
+        <p style="color: var(--text-secondary);">設定您常用的日常收支（例如：午餐、搭捷運、薪水），點擊即可一鍵快速完成記帳！</p>
+    </div>
+    <div>
+        <a href="{{ url_for('template.create_template') }}" class="btn btn-primary">➕ 新增常用模板</a>
+    </div>
+</div>
+
+<div class="template-grid">
+    {% for tmpl in templates %}
+        <div class="template-card" style="border-top: 3px solid {% if tmpl.type == 'income' %}var(--success){% else %}var(--primary){% endif %};">
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
+                    <h3 style="margin-bottom: 0; font-weight: 600; color: var(--text-primary);">{{ tmpl.name }}</h3>
+                    <span class="category-badge" style="background-color: {% if tmpl.type == 'income' %}rgba(16, 185, 129, 0.15){% else %}rgba(244, 63, 94, 0.15){% endif %}; color: {% if tmpl.type == 'income' %}var(--success){% else %}var(--primary){% endif %}; border: none;">
+                        {% if tmpl.type == 'income' %}收入{% else %}支出{% endif %}
+                    </span>
+                </div>
+                
+                <div style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-primary);">
+                    ${{ "{:,.2f}".format(tmpl.amount) }}
+                </div>
+                
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                    <div><strong>分類：</strong>{{ tmpl.category_name or '未分類' }}</div>
+                    {% if tmpl.note %}
+                        <div style="margin-top: 0.25rem;"><strong>備註：</strong>{{ tmpl.note }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div style="border-top: 1px solid var(--border-color); padding-top: 1rem; margin-top: auto; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <!-- 一鍵套用 (POST) -->
+                <form action="{{ url_for('template.apply_template', id=tmpl.id) }}" method="POST" style="flex: 2; min-width: 100px;">
+                    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.5rem; font-size: 0.85rem; background-color: {% if tmpl.type == 'income' %}var(--success){% else %}var(--secondary){% endif %}; box-shadow: none;">
+                        ⚡ 一鍵套用
+                    </button>
+                </form>
+                <a href="{{ url_for('template.edit_template', id=tmpl.id) }}" class="btn btn-secondary" style="padding: 0.5rem; font-size: 0.85rem; flex: 1; text-align: center;">編輯</a>
+                <form action="{{ url_for('template.delete_template', id=tmpl.id) }}" method="POST" onsubmit="return confirm('確定要刪除此常用記帳模板嗎？');" style="display: inline; flex: 1;">
+                    <button type="submit" class="btn btn-danger" style="width: 100%; padding: 0.5rem; font-size: 0.85rem;">刪除</button>
+                </form>
+            </div>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <span style="font-size: 3rem; margin-bottom: 1rem;">⚡</span>
+            <h3>無任何常用模板</h3>
+            <p>目前尚無設定任何快速記帳模板。建立一些常用的項目，讓未來記帳更省時！</p>
+            <a href="{{ url_for('template.create_template') }}" class="btn btn-primary">新增快速模板</a>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}

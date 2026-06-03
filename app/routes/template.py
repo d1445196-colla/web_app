@@ -1,12 +1,12 @@
-"""
-app/routes/template.py
-常用模板路由
+# app/routes/template.py
+# 常用模板路由
 
-Blueprint: template_bp
-負責常用模板的新增、列表、編輯、刪除、套用。
-"""
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
+from datetime import date
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from app.models import template
+from app.models import category
+from app.models import transaction
 
 template_bp = Blueprint('template', __name__)
 
@@ -15,80 +15,133 @@ template_bp = Blueprint('template', __name__)
 def list_templates():
     """
     常用模板列表
-
-    GET /templates
-
-    處理邏輯：呼叫 template.get_all_templates() 取得所有模板
-    輸出：渲染 templates/list.html，傳入 templates
     """
-    pass
+    templates = template.get_all_templates()
+    return render_template('templates/list.html', templates=templates)
 
 
 @template_bp.route('/templates/new', methods=['GET', 'POST'])
 def create_template():
     """
     新增常用模板
-
-    GET  /templates/new → 顯示新增表單
-    POST /templates/new → 接收表單，存入 DB
-
-    POST 處理邏輯：
-    1. 從 request.form 取得 name, type, amount, category_id, note
-    2. 驗證資料
-    3. 呼叫 template.create_template(name, type, amount, category_id, note)
-    4. 成功 → 重導向至 /templates
     """
-    pass
+    categories = category.get_all_categories()
+    
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        tx_type = request.form.get('type', '').strip()
+        amount_str = request.form.get('amount', '0')
+        category_id_str = request.form.get('category_id', '0')
+        note = request.form.get('note', '').strip()
+
+        # 驗證資料
+        if not name:
+            flash('[ERROR] 模板名稱不可為空', 'danger')
+            return render_template('templates/form.html', categories=categories, template=None)
+            
+        if tx_type not in ['income', 'expense']:
+            flash('[ERROR] 交易類型錯誤', 'danger')
+            return render_template('templates/form.html', categories=categories, template=None)
+
+        try:
+            amount = float(amount_str)
+            if amount <= 0:
+                raise ValueError()
+        except ValueError:
+            flash('[ERROR] 金額必須是正數', 'danger')
+            return render_template('templates/form.html', categories=categories, template=None)
+
+        try:
+            category_id = int(category_id_str)
+        except ValueError:
+            flash('[ERROR] 請選擇一個分類', 'danger')
+            return render_template('templates/form.html', categories=categories, template=None)
+
+        template.create_template(name, tx_type, amount, category_id, note)
+        flash('[OK] 常用模板已建立', 'success')
+        return redirect(url_for('template.list_templates'))
+
+    return render_template('templates/form.html', categories=categories, template=None)
 
 
 @template_bp.route('/templates/<int:id>/edit', methods=['GET', 'POST'])
 def edit_template(id):
     """
     編輯常用模板
-
-    GET  /templates/<id>/edit → 顯示編輯表單（預填資料）
-    POST /templates/<id>/edit → 接收表單，更新 DB
-
-    GET 處理邏輯：
-    1. 呼叫 template.get_template_by_id(id)，找不到 → 404
-    2. 呼叫 category.get_all_categories() 取得分類清單
-    3. 渲染 templates/form.html，傳入 categories, template
-
-    POST 處理邏輯：
-    1. 驗證表單資料
-    2. 呼叫 template.update_template(id, ...)
-    3. 重導向至 /templates
     """
-    pass
+    tmpl = template.get_template_by_id(id)
+    if tmpl is None:
+        abort(404)
+
+    categories = category.get_all_categories()
+
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        tx_type = request.form.get('type', '').strip()
+        amount_str = request.form.get('amount', '0')
+        category_id_str = request.form.get('category_id', '0')
+        note = request.form.get('note', '').strip()
+
+        # 驗證資料
+        if not name:
+            flash('[ERROR] 模板名稱不可為空', 'danger')
+            return render_template('templates/form.html', categories=categories, template=tmpl)
+            
+        if tx_type not in ['income', 'expense']:
+            flash('[ERROR] 交易類型錯誤', 'danger')
+            return render_template('templates/form.html', categories=categories, template=tmpl)
+
+        try:
+            amount = float(amount_str)
+            if amount <= 0:
+                raise ValueError()
+        except ValueError:
+            flash('[ERROR] 金額必須是正數', 'danger')
+            return render_template('templates/form.html', categories=categories, template=tmpl)
+
+        try:
+            category_id = int(category_id_str)
+        except ValueError:
+            flash('[ERROR] 請選擇一個分類', 'danger')
+            return render_template('templates/form.html', categories=categories, template=tmpl)
+
+        template.update_template(id, name, tx_type, amount, category_id, note)
+        flash('[OK] 常用模板已更新', 'success')
+        return redirect(url_for('template.list_templates'))
+
+    return render_template('templates/form.html', categories=categories, template=tmpl)
 
 
 @template_bp.route('/templates/<int:id>/delete', methods=['POST'])
 def delete_template(id):
     """
     刪除常用模板
-
-    POST /templates/<id>/delete
-
-    處理邏輯：呼叫 template.delete_template(id)
-    輸出：重導向至 /templates
     """
-    pass
+    tmpl = template.get_template_by_id(id)
+    if tmpl is None:
+        abort(404)
+
+    template.delete_template(id)
+    flash('[OK] 常用模板已刪除', 'success')
+    return redirect(url_for('template.list_templates'))
 
 
 @template_bp.route('/templates/<int:id>/apply', methods=['POST'])
 def apply_template(id):
     """
     套用常用模板（一鍵記帳）
-
-    POST /templates/<id>/apply
-
-    處理邏輯：
-    1. 呼叫 template.get_template_by_id(id) 取得模板資料，找不到 → 404
-    2. 呼叫 transaction.create_transaction(
-           type=模板.type, amount=模板.amount,
-           category_id=模板.category_id, date=今天, note=模板.note
-       )
-    3. flash 成功訊息
-    輸出：重導向至 /（首頁）
     """
-    pass
+    tmpl = template.get_template_by_id(id)
+    if tmpl is None:
+        abort(404)
+
+    today = date.today().strftime('%Y-%m-%d')
+    transaction.create_transaction(
+        type=tmpl['type'],
+        amount=tmpl['amount'],
+        category_id=tmpl['category_id'],
+        date=today,
+        note=tmpl['note']
+    )
+    flash(f"[OK] 已套用模板「{tmpl['name']}」，一鍵記帳成功！", 'success')
+    return redirect(url_for('transaction.list_transactions'))
