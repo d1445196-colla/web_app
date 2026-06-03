@@ -1,258 +1,369 @@
-# 系統架構設計文件：語音轉寫與 API 整合系統
+# 系統架構設計 — 即時標記錄音系統
+
+> **文件版本：** v1.0
+> **建立日期：** 2026-05-19
+> **依據文件：** [PRD.md](PRD.md)
+
+---
 
 ## 1. 技術架構說明
 
-本專案為「即時標記與語音辨識錄音工具」的後端子系統，負責音訊上傳、Whisper API 串接、轉寫結果儲存與時間軸對齊。採用 Python 輕量級網頁框架，並整合外部 AI 語音辨識服務。
+### 1.1 選用技術與原因
 
-### 選用技術與原因
+| 技術 | 角色 | 選用原因 |
+|------|------|---------|
+| **Python + Flask** | 後端 Web 框架 | 輕量、易上手，適合快速開發原型；豐富的套件生態系 |
+| **Jinja2** | HTML 模板引擎 | Flask 內建，支援模板繼承與巨集，減少重複 HTML |
+| **SQLite** | 關聯式資料庫 | 零配置、單檔案部署，適合單機 / 小團隊使用情境 |
+| **Web Audio API** | 前端音訊擷取與分析 | 瀏覽器原生 API，可即時取得音量資料繪製波形 |
+| **MediaRecorder API** | 前端錄音 | 瀏覽器原生 API，可將麥克風串流錄製為音訊檔案 |
+| **Canvas API** | 前端波形繪製 | 高效能 2D 繪圖，適合每秒 60 幀的即時波形動畫 |
+| **vanilla JavaScript** | 前端互動邏輯 | 不依賴前端框架，降低複雜度，適合教學情境 |
 
-- **後端框架：Python + Flask**
-  - **原因**：Flask 輕量且彈性高，適合快速建構 RESTful 上傳端點與頁面渲染。其豐富的擴充生態系（如 `python-dotenv`、`requests`）能輕鬆整合外部 API，學習曲線平緩，非常適合團隊協作開發。
+### 1.2 Flask MVC 模式說明
 
-- **模板引擎：Jinja2**
-  - **原因**：與 Flask 深度整合，可直接將轉寫結果、時間軸資料嵌入 HTML 頁面渲染。內建自動轉義功能可防護 XSS 攻擊，讓前端呈現安全且直覺。
-
-- **資料庫：SQLite**
-  - **原因**：零設定、單一檔案，適合 MVP 階段快速開發。用於儲存錄音紀錄、轉寫逐字稿、時間戳段落與即時標記資料，效能足以應付中小規模的使用場景。
-
-- **外部 API：OpenAI Whisper API**
-  - **原因**：OpenAI 提供的雲端語音辨識服務（`whisper-1` 模型），支援多語言與多種音訊格式，透過 `verbose_json` 回傳格式可取得逐句時間戳，適合需要時間軸對齊的應用場景。
-
-- **環境變數管理：python-dotenv**
-  - **原因**：將 API 金鑰等機敏資訊存放於 `.env` 檔案，避免寫死在程式碼中，兼顧安全性與開發便利性。
-
-### Flask MVC 模式說明
-
-本專案依循 MVC（Model-View-Controller）的概念組織程式碼，並額外引入 **Service 層** 來封裝與外部 API 的互動邏輯：
-
-- **Model（模型層）**：負責定義資料結構與 SQLite 資料庫操作，包含「錄音紀錄 (Recording)」、「轉寫段落 (Segment)」、「即時標記 (Marker)」等資料表的 CRUD 方法。
-- **View（視圖層）**：由 Jinja2 模板擔任，負責渲染轉寫結果頁面、歷史紀錄列表等 HTML 介面。
-- **Controller（控制器層）**：由 Flask 路由（Routes）擔任，負責接收前端的上傳請求、呼叫 Service 層進行 API 串接、將結果透過 Model 寫入資料庫、最後將資料傳遞給 View 渲染。
-- **Service（服務層）**：封裝與 OpenAI Whisper API 的串接邏輯，包含檔案驗證、API 呼叫、回應解析、錯誤處理等。將外部 API 的互動邏輯從 Controller 中抽離，提高可測試性與可維護性。
+本專案採用 **MVC（Model-View-Controller）** 架構模式，將程式碼依職責分層：
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    使用者瀏覽器                            │
-│          (上傳音訊 / 查看轉寫結果 / 瀏覽標記)               │
-└──────────────────────┬──────────────────────────────────┘
-                       │ HTTP Request
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│              Flask Route (Controller)                   │
-│     接收上傳請求 → 呼叫 Service → 調用 Model → 渲染 View  │
-└──────┬──────────────────┬───────────────────┬───────────┘
-       │                  │                   │
-       ▼                  ▼                   ▼
-┌─────────────┐  ┌─────────────────┐  ┌──────────────────┐
-│   Service   │  │  Model (資料層)  │  │ Jinja2 Template  │
-│ Whisper API │  │  SQLite CRUD    │  │    (View)        │
-│  串接與解析  │  │  錄音/段落/標記  │  │  結果頁面渲染     │
-└──────┬──────┘  └────────┬────────┘  └──────────────────┘
-       │                  │
-       ▼                  ▼
-┌─────────────┐  ┌─────────────────┐
-│ OpenAI API  │  │  SQLite 資料庫   │
-│ (whisper-1) │  │ (database.db)   │
-└─────────────┘  └─────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                        瀏覽器 (Browser)                      │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  Web Audio API / MediaRecorder / Canvas（前端 JS）      │  │
+│  └───────────────────────────────────────────────────────┘  │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ HTTP Request / 上傳音訊檔
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Flask 後端 (Server)                        │
+│                                                             │
+│  ┌─────────────┐   ┌──────────────┐   ┌──────────────────┐ │
+│  │ Controller  │──▶│    Model     │──▶│    SQLite DB     │ │
+│  │ (routes/)   │   │  (models/)   │   │ (instance/       │ │
+│  │             │◀──│              │◀──│   database.db)   │ │
+│  └──────┬──────┘   └──────────────┘   └──────────────────┘ │
+│         │                                                   │
+│         ▼                                                   │
+│  ┌─────────────┐                                            │
+│  │    View     │                                            │
+│  │(templates/) │──▶ HTML 回應給瀏覽器                         │
+│  └─────────────┘                                            │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+| 層級 | 資料夾 | 職責 |
+|------|-------|------|
+| **Model（模型）** | `app/models/` | 定義資料結構、負責與 SQLite 資料庫的讀寫操作（CRUD） |
+| **View（視圖）** | `app/templates/` | Jinja2 HTML 模板，負責頁面的呈現與排版 |
+| **Controller（控制器）** | `app/routes/` | Flask 路由，接收 HTTP 請求、呼叫 Model、選擇 View 回傳 |
+| **Static（靜態資源）** | `app/static/` | CSS 樣式表、JavaScript 腳本（含音訊處理）、圖片等 |
+
+### 1.3 前後端協作模式
+
+本系統的特殊之處在於**錄音與波形視覺化完全在前端（瀏覽器）執行**，後端負責**資料持久化與頁面渲染**：
+
+```
+前端（瀏覽器）負責：                    後端（Flask）負責：
+├── 麥克風存取與錄音 (MediaRecorder)     ├── 頁面渲染 (Jinja2)
+├── 即時波形繪製 (Web Audio + Canvas)    ├── 接收 & 儲存錄音檔案
+├── 計時器顯示                          ├── 標記資料 CRUD
+├── 標記按鈕 UI 與暫存                  ├── 錄音後設資料管理
+└── 鍵盤快捷鍵監聽                      └── API 端點（整合用）
+```
+
+> **關鍵流程：** 使用者在前端完成錄音 → 點選「停止」→ 前端將**音訊 Blob** 與**標記 JSON** 一起透過 `fetch()` 上傳至後端 → 後端儲存檔案與資料庫記錄。
 
 ---
 
 ## 2. 專案資料夾結構
 
-以下是本專案的完整資料夾結構與各檔案職責說明：
-
-```text
-web_app_development/
-├── app/                        # 應用程式主目錄
-│   ├── __init__.py             # 初始化 Flask 應用程式、註冊 Blueprint、載入設定
-│   ├── models/                 # (Model) 資料庫模型定義與操作
+```
+即時標記錄音系統/
+│
+├── app.py                          ← Flask 應用程式入口
+├── config.py                       ← 設定檔（SECRET_KEY、DB 路徑等）
+├── requirements.txt                ← Python 套件依賴清單
+│
+├── app/                            ← 主要應用程式套件
+│   ├── __init__.py                 ← Flask app 工廠函式（create_app）
+│   │
+│   ├── models/                     ← Model 層：資料庫模型
 │   │   ├── __init__.py
-│   │   ├── recording.py        # 錄音紀錄資料表操作 (CRUD)
-│   │   ├── segment.py          # 轉寫段落資料表操作 (每句文字 + start/end 時間)
-│   │   └── marker.py           # 即時標記資料表操作 (標記時間點 + 對齊段落)
-│   ├── routes/                 # (Controller) Flask 路由處理邏輯
+│   │   ├── recording.py            ← 錄音紀錄模型（Recording）
+│   │   ├── marker.py               ← 標記模型（Marker）
+│   │   └── marker_type.py          ← 標記種類模型（MarkerType）
+│   │
+│   ├── routes/                     ← Controller 層：Flask 路由
 │   │   ├── __init__.py
-│   │   ├── upload.py           # 音訊上傳路由：接收檔案、驗證、觸發轉寫
-│   │   └── transcription.py    # 轉寫結果路由：查看逐字稿、歷史紀錄
-│   ├── services/               # (Service) 外部 API 串接與商業邏輯
-│   │   ├── __init__.py
-│   │   ├── whisper_client.py   # Whisper API 呼叫封裝 (含在地化 prompt)
-│   │   ├── file_validator.py   # 檔案驗證邏輯 (大小、副檔名、MIME Type)
-│   │   └── timeline_align.py   # 時間軸對齊邏輯 (Marker ↔ Segment 配對)
-│   ├── templates/              # (View) Jinja2 HTML 頁面模板
-│   │   ├── base.html           # 共用版型 (標題列、導覽列、CSS/JS 引入)
-│   │   └── transcriptions/     # 轉寫相關頁面
-│   │       ├── upload.html     # 音訊上傳頁面 (含進度指示)
-│   │       ├── result.html     # 單筆轉寫結果頁面 (逐字稿 + 時間軸 + 標記)
-│   │       └── history.html    # 轉寫歷史紀錄列表頁面
-│   └── static/                 # CSS、JS、圖片等靜態資源
+│   │   ├── main.py                 ← 首頁 / 錄音主頁路由
+│   │   ├── recording.py            ← 錄音相關路由（儲存、列表、詳情、刪除）
+│   │   ├── marker.py               ← 標記相關路由（CRUD）
+│   │   └── api.py                  ← RESTful API 端點（系統整合用）
+│   │
+│   ├── templates/                  ← View 層：Jinja2 HTML 模板
+│   │   ├── base.html               ← 基礎模板（共用 header / footer / CSS / JS 引入）
+│   │   ├── index.html              ← 錄音主頁面（波形 + 計時器 + 標記 + 控制按鈕）
+│   │   ├── save.html               ← 錄音儲存表單頁面
+│   │   ├── recordings/
+│   │   │   ├── list.html           ← 錄音列表頁面
+│   │   │   └── detail.html         ← 錄音詳情 / 回顧頁面
+│   │   └── settings/
+│   │       └── marker_types.html   ← 標記種類管理頁面
+│   │
+│   └── static/                     ← 靜態資源
 │       ├── css/
-│       │   └── style.css       # 主要樣式表
-│       └── js/
-│           └── upload.js       # 前端上傳互動邏輯 (進度條、狀態輪詢)
-├── instance/                   # 存放本地端變動性資料 (不進版控)
-│   ├── database.db             # SQLite 資料庫檔案
-│   └── uploads/                # 暫存上傳的音訊檔案
-├── docs/                       # 專案設計文件
-│   ├── PRD.md                  # 產品需求文件
-│   └── ARCHITECTURE.md         # 系統架構文件 (本文件)
-├── .env                        # 環境變數 (API 金鑰等，不進版控)
-├── .gitignore                  # Git 忽略規則
-├── requirements.txt            # Python 依賴套件清單
-└── app.py                      # 應用程式啟動入口
+│       │   └── style.css           ← 全站樣式
+│       ├── js/
+│       │   ├── recorder.js         ← 錄音控制邏輯（MediaRecorder 封裝）
+│       │   ├── waveform.js         ← 波形視覺化邏輯（Web Audio + Canvas）
+│       │   ├── timer.js            ← 計時器邏輯
+│       │   ├── marker.js           ← 標記按鈕互動邏輯
+│       │   └── keyboard.js         ← 鍵盤快捷鍵監聽
+│       └── uploads/                ← 上傳的錄音檔案存放處
+│
+├── database/                       ← 資料庫相關
+│   └── schema.sql                  ← SQL 建表語法
+│
+├── instance/                       ← Flask instance 資料夾（自動產生）
+│   └── database.db                 ← SQLite 資料庫檔案
+│
+└── docs/                           ← 設計文件
+    ├── PRD.md                      ← 產品需求文件
+    ├── ARCHITECTURE.md             ← 系統架構文件（本文件）
+    ├── FLOWCHART.md                ← 使用者流程圖
+    ├── DB_DESIGN.md                ← 資料庫設計
+    └── ROUTES.md                   ← 路由設計
 ```
 
-### 各資料夾職責詳解
+### 各資料夾 / 檔案用途說明
 
-| 資料夾/檔案 | 職責說明 |
-|---|---|
-| `app/__init__.py` | 建立 Flask app 實例、載入 `.env` 設定、註冊各 Blueprint、初始化資料庫連線 |
-| `app/models/` | 定義三個核心資料表（Recording、Segment、Marker）的 Python 操作函式，封裝所有 SQL 查詢 |
-| `app/routes/` | 處理 HTTP 請求的路由邏輯，分為「上傳」與「轉寫結果」兩組 Blueprint |
-| `app/services/` | **本專案的核心差異點**——封裝 Whisper API 呼叫、檔案驗證、時間軸對齊等商業邏輯，與 Controller 解耦 |
-| `app/templates/` | Jinja2 模板，負責渲染上傳介面、轉寫結果與歷史紀錄頁面 |
-| `app/static/` | 前端靜態資源，包含樣式表與上傳互動的 JavaScript |
-| `instance/` | SQLite 資料庫與上傳的暫存音訊檔案，此目錄不進版控 |
-| `.env` | 儲存 `OPENAI_API_KEY` 等機敏環境變數 |
+| 路徑 | 類型 | 說明 |
+|------|------|------|
+| `app.py` | 入口 | 啟動 Flask 開發伺服器，呼叫 `create_app()` |
+| `config.py` | 設定 | 集中管理環境變數、SECRET_KEY、資料庫路徑、上傳目錄路徑 |
+| `requirements.txt` | 依賴 | 列出 `flask` 等所需套件，方便 `pip install -r requirements.txt` |
+| `app/__init__.py` | 工廠 | 建立 Flask app 實例、註冊 Blueprint、初始化資料庫 |
+| `app/models/` | Model | 每個檔案對應一張資料表，封裝 SQL 查詢為 Python 方法 |
+| `app/routes/` | Controller | 每個檔案用 `Blueprint` 組織相關路由，保持模組化 |
+| `app/templates/` | View | Jinja2 模板，`base.html` 定義共用版面，其他頁面繼承它 |
+| `app/static/js/` | 前端 JS | 各功能拆分為獨立模組，方便維護與分工 |
+| `app/static/uploads/` | 檔案儲存 | 錄音音訊檔案的實際儲存位置 |
+| `database/schema.sql` | Schema | 資料庫建表 SQL，可用於初始化或重建資料庫 |
+| `instance/` | 實例資料 | Flask 內建的 instance 資料夾，存放 SQLite DB 檔案 |
 
 ---
 
 ## 3. 元件關係圖
 
-### 3.1 完整系統互動序列圖
-
-以下展示從使用者上傳音訊到取得轉寫結果的完整互動流程：
-
-```mermaid
-sequenceDiagram
-    participant User as 使用者 (瀏覽器)
-    participant Route as Flask Route (Controller)
-    participant Validator as FileValidator (Service)
-    participant Whisper as WhisperClient (Service)
-    participant Aligner as TimelineAlign (Service)
-    participant Model as Model (資料操作)
-    participant DB as SQLite 資料庫
-    participant API as OpenAI Whisper API
-
-    User->>Route: 1. POST /upload (上傳音訊 + Markers JSON)
-    Route->>Validator: 2. 驗證檔案 (大小、副檔名、MIME)
-    Validator-->>Route: 3. 驗證結果 (通過 / 拒絕)
-
-    alt 驗證失敗
-        Route-->>User: 回傳 400 錯誤訊息
-    end
-
-    Route->>Model: 4. 建立 Recording 紀錄 (status=processing)
-    Model->>DB: INSERT INTO recordings
-    DB-->>Model: 回傳 recording_id
-    Route-->>User: 5. 回傳 202 Accepted (含 recording_id)
-
-    Route->>Whisper: 6. 呼叫 transcribe(audio_file, prompt)
-    Whisper->>API: 7. POST /v1/audio/transcriptions
-    API-->>Whisper: 8. 回傳 verbose_json (segments[])
-
-    alt API 呼叫失敗
-        Whisper-->>Route: 回傳錯誤 (401/429/503/504)
-        Route->>Model: 更新 Recording status=failed
-    end
-
-    Whisper-->>Route: 9. 回傳解析後的 segments 資料
-    Route->>Model: 10. 批次寫入 Segment 資料
-    Model->>DB: INSERT INTO segments (多筆)
-
-    Route->>Aligner: 11. 對齊 Markers ↔ Segments
-    Aligner-->>Route: 12. 回傳對齊結果
-    Route->>Model: 13. 寫入 Marker 對齊資訊
-    Model->>DB: UPDATE markers SET segment_id=...
-
-    Route->>Model: 14. 更新 Recording status=completed
-    Model->>DB: UPDATE recordings SET status='completed'
-```
-
-### 3.2 MVC + Service 架構總覽圖
+### 3.1 整體系統架構圖
 
 ```mermaid
 graph TB
-    subgraph "使用者端"
-        Browser["瀏覽器<br/>(上傳音訊 / 查看結果)"]
+    subgraph Browser["瀏覽器（前端）"]
+        MIC["🎤 麥克風"]
+        WA["Web Audio API<br/>AnalyserNode"]
+        MR["MediaRecorder API"]
+        CV["Canvas API<br/>波形繪製"]
+        UI["HTML/CSS/JS<br/>UI 介面"]
+        
+        MIC --> WA
+        MIC --> MR
+        WA --> CV
+        CV --> UI
     end
-
-    subgraph "Controller 層 (Flask Routes)"
-        R1["upload.py<br/>音訊上傳路由"]
-        R2["transcription.py<br/>轉寫結果路由"]
+    
+    subgraph Flask["Flask 後端"]
+        RT["routes/<br/>（Controller）"]
+        MD["models/<br/>（Model）"]
+        TM["templates/<br/>（View）"]
+        ST["static/uploads/<br/>（檔案儲存）"]
     end
-
-    subgraph "Service 層 (商業邏輯)"
-        S1["file_validator.py<br/>檔案驗證"]
-        S2["whisper_client.py<br/>Whisper API 串接"]
-        S3["timeline_align.py<br/>時間軸對齊"]
+    
+    subgraph DB["資料庫"]
+        SQ["SQLite<br/>database.db"]
     end
+    
+    UI -- "HTTP GET<br/>頁面請求" --> RT
+    UI -- "fetch() POST<br/>上傳音訊+標記" --> RT
+    RT --> MD
+    MD --> SQ
+    SQ --> MD
+    MD --> RT
+    RT --> TM
+    TM -- "HTML 回應" --> UI
+    RT -- "儲存檔案" --> ST
+    
+    style Browser fill:#1a1a2e,stroke:#e94560,color:#fff
+    style Flask fill:#16213e,stroke:#0f3460,color:#fff
+    style DB fill:#0f3460,stroke:#533483,color:#fff
+```
 
-    subgraph "Model 層 (資料操作)"
-        M1["recording.py<br/>錄音紀錄"]
-        M2["segment.py<br/>轉寫段落"]
-        M3["marker.py<br/>即時標記"]
+### 3.2 錄音主頁面元件圖
+
+```mermaid
+graph TB
+    subgraph RecordPage["錄音主頁面 (index.html)"]
+        TIMER["⏱ 計時器<br/>timer.js<br/>HH:MM:SS"]
+        WAVE["🌊 波形視覺化<br/>waveform.js<br/>Canvas 即時繪製"]
+        MARKERS["🏷 標記按鈕區<br/>marker.js<br/>關鍵重點 / 故事 / 不清晰..."]
+        CONTROLS["🎛 錄音控制<br/>recorder.js<br/>開始 / 暫停 / 停止"]
+        KB["⌨ 鍵盤快捷鍵<br/>keyboard.js"]
     end
+    
+    TIMER --- WAVE
+    WAVE --- MARKERS
+    MARKERS --- CONTROLS
+    KB -.-> CONTROLS
+    KB -.-> MARKERS
+    
+    style RecordPage fill:#1a1a2e,stroke:#e94560,color:#fff
+```
 
-    subgraph "View 層 (Jinja2 模板)"
-        V1["upload.html<br/>上傳頁面"]
-        V2["result.html<br/>轉寫結果"]
-        V3["history.html<br/>歷史紀錄"]
-    end
+### 3.3 資料流向圖
 
-    subgraph "外部資源"
-        DB[("SQLite<br/>database.db")]
-        API["OpenAI Whisper API"]
-        FS["檔案系統<br/>instance/uploads/"]
-    end
+```mermaid
+sequenceDiagram
+    participant U as 使用者
+    participant B as 瀏覽器 (JS)
+    participant F as Flask (routes/)
+    participant M as Model (models/)
+    participant D as SQLite DB
+    participant FS as 檔案系統
 
-    Browser --> R1
-    Browser --> R2
-    R1 --> S1
-    R1 --> S2
-    R1 --> S3
-    R1 --> M1
-    R1 --> M2
-    R1 --> M3
-    R2 --> M1
-    R2 --> M2
-    R2 --> M3
-    R1 --> V1
-    R2 --> V2
-    R2 --> V3
-    S2 --> API
-    M1 --> DB
-    M2 --> DB
-    M3 --> DB
-    R1 --> FS
+    U->>B: 點選「開始錄音」
+    B->>B: MediaRecorder 開始錄音
+    B->>B: Web Audio 分析音量 → Canvas 繪製波形
+    
+    U->>B: 點選標記按鈕（如「關鍵重點」）
+    B->>B: 暫存標記（時間戳 + 種類）至 JS 陣列
+    
+    U->>B: 點選「停止錄音」
+    B->>B: MediaRecorder 產生音訊 Blob
+    
+    U->>B: 輸入標題，點選「儲存」
+    B->>F: POST /recordings (FormData: 音訊檔 + 標記 JSON + 標題)
+    F->>FS: 儲存音訊檔案至 static/uploads/
+    F->>M: Recording.create(標題, 檔案路徑, 時長)
+    M->>D: INSERT INTO recordings
+    D-->>M: recording_id
+    F->>M: Marker.create_batch(recording_id, 標記清單)
+    M->>D: INSERT INTO markers (批次)
+    F-->>B: 重導向至 /recordings/<id>
+    
+    B->>F: GET /recordings/<id>
+    F->>M: Recording.get(id) + Marker.get_by_recording(id)
+    M->>D: SELECT 查詢
+    D-->>M: 資料
+    M-->>F: Recording + Markers
+    F->>F: 渲染 detail.html（Jinja2）
+    F-->>B: HTML 頁面
+    B-->>U: 顯示錄音回顧頁面
 ```
 
 ---
 
 ## 4. 關鍵設計決策
 
-### 決策 1：引入 Service 層，將外部 API 邏輯從 Controller 中抽離
+### 決策 1：錄音在前端完成，後端只負責儲存
 
-- **做法**：新增 `app/services/` 資料夾，將 Whisper API 呼叫（`whisper_client.py`）、檔案驗證（`file_validator.py`）、時間軸對齊（`timeline_align.py`）等邏輯各自封裝為獨立模組。
-- **原因**：與傳統的 CRUD 應用不同，本系統涉及外部 API 呼叫、複雜的檔案驗證與時間軸演算邏輯。若將這些邏輯全部塞進 Route 函式中，會導致 Controller 過於臃腫且難以測試。Service 層讓每個模組職責單一，未來若需更換語音辨識 API（例如改用 Google Speech-to-Text），只需替換 `whisper_client.py` 即可，不影響其他元件。
+**決策：** 使用瀏覽器原生的 `MediaRecorder API` 在前端完成錄音，完成後才將音訊檔案上傳到後端。
 
-### 決策 2：採用同步處理搭配 202 Accepted 狀態碼
+**原因：**
+- 即時錄音需要極低延遲，若將音訊串流即時傳送到後端會增加網路延遲與複雜度
+- 瀏覽器 `MediaRecorder API` 已提供穩定的錄音功能，無需後端介入
+- 後端只需處理檔案儲存與後設資料管理，職責更單純
 
-- **做法**：上傳請求先回傳 `202 Accepted`（表示已接受），後端同步完成 Whisper API 呼叫後更新資料庫狀態，前端透過輪詢（Polling）機制查詢處理進度。
-- **原因**：在 MVP 階段避免引入 Celery 等非同步任務佇列的額外複雜度。Whisper API 對 25MB 以下的音訊通常能在 30-60 秒內回應，搭配前端輪詢已能提供可接受的使用者體驗。未來若需處理更長時間的音訊，可再升級為真正的非同步任務架構。
+**取捨：**
+- 長時間錄音可能受限於瀏覽器記憶體（4 小時上限需測試驗證）
+- 若瀏覽器意外關閉，未儲存的錄音將遺失
 
-### 決策 3：使用 `.env` + `python-dotenv` 管理 API 金鑰
+---
 
-- **做法**：將 `OPENAI_API_KEY` 存放於專案根目錄的 `.env` 檔案，並透過 `.gitignore` 排除版控。Flask app 啟動時自動載入環境變數。
-- **原因**：API 金鑰屬於高度機敏資訊，絕不可出現在程式碼或 Git 提交歷史中。`.env` 方案是 Flask 社群最普遍的做法，搭配 `python-dotenv` 可在開發環境自動載入，部署時則由主機環境變數覆蓋。
+### 決策 2：標記先暫存在前端，隨錄音一併上傳
 
-### 決策 4：音訊檔案暫存於 `instance/uploads/`，與資料庫分離
+**決策：** 使用者在錄音過程中的所有標記操作，先暫存於前端 JavaScript 陣列中，待錄音停止並儲存時，與音訊檔案一起上傳至後端。
 
-- **做法**：上傳的音訊檔案以 UUID 重新命名後存放於 `instance/uploads/` 目錄，資料庫中僅儲存檔案路徑參照。
-- **原因**：SQLite 不適合儲存大型二進位資料（BLOB），將音訊檔案存放於檔案系統可避免資料庫膨脹、提升查詢效能。使用 UUID 重新命名可防止檔名衝突與路徑穿越攻擊。`instance/` 目錄已在 Flask 的慣例中作為本地端資料目錄，不進版控。
+**原因：**
+- 避免錄音過程中頻繁發送 HTTP 請求，影響錄音穩定性
+- 標記資料量小（JSON 陣列），與音訊檔案一起上傳不會增加負擔
+- 簡化後端邏輯：一次請求完成「儲存錄音 + 儲存所有標記」
 
-### 決策 5：Whisper API 指定 `verbose_json` 格式與在地化 prompt
+**取捨：**
+- 若瀏覽器意外關閉，暫存的標記也會遺失（可考慮未來版本加入 `localStorage` 備份）
 
-- **做法**：呼叫 Whisper API 時固定指定 `response_format=verbose_json`，並在 `prompt` 參數中預設注入台灣在地化提示詞。
-- **原因**：`verbose_json` 格式會回傳每個 segment 的 `start`、`end` 時間戳，這是實現「時間軸對齊」功能的基礎資料。而在 prompt 中加入「台灣習慣用語、國台語混雜」等提示詞，是 Whisper 官方建議的提升辨識精準度的做法，可顯著改善台灣在地訪談場景的轉寫品質。
+---
+
+### 決策 3：前端 JavaScript 模組化拆分
+
+**決策：** 將前端 JavaScript 按功能拆分為 5 個獨立模組（`recorder.js`、`waveform.js`、`timer.js`、`marker.js`、`keyboard.js`）。
+
+**原因：**
+- 錄音主頁面的前端邏輯較複雜（音訊處理 + 波形繪製 + 計時器 + 標記 + 快捷鍵），若全部寫在一個檔案中會難以維護
+- 拆分後每位團隊成員可以獨立負責不同模組，降低合併衝突
+- 每個模組職責單一，方便測試與除錯
+
+**模組間溝通方式：**
+- 使用全域事件（`CustomEvent`）或共享狀態物件進行模組間通訊
+- 例如：`recorder.js` 發出 `recording-started` 事件 → `timer.js` 和 `waveform.js` 接收並開始運作
+
+---
+
+### 決策 4：使用 Flask Blueprint 組織路由
+
+**決策：** 每個功能模組的路由使用獨立的 `Blueprint` 註冊，而非全部寫在一個檔案中。
+
+**原因：**
+- 路由分散在 `main.py`、`recording.py`、`marker.py`、`api.py`，各自負責不同功能
+- 團隊成員可以平行開發不同路由檔案，減少 Git 合併衝突
+- 未來擴充新功能時，只需新增 Blueprint，不影響既有程式碼
+
+**註冊方式：**
+```python
+# app/__init__.py
+from app.routes.main import main_bp
+from app.routes.recording import recording_bp
+from app.routes.marker import marker_bp
+from app.routes.api import api_bp
+
+app.register_blueprint(main_bp)
+app.register_blueprint(recording_bp)
+app.register_blueprint(marker_bp)
+app.register_blueprint(api_bp, url_prefix='/api')
+```
+
+---
+
+### 決策 5：預留 RESTful API 層為未來整合做準備
+
+**決策：** 在 `routes/api.py` 中獨立設計 RESTful API 端點，與頁面路由分開。
+
+**原因：**
+- PRD 明確要求與「語音轉寫」、「AI 摘要」、「訪談歷史管理」等系統整合
+- API 端點回傳 JSON，頁面路由回傳 HTML，兩者職責不同，應分開管理
+- 使用 `/api` URL 前綴統一命名，便於識別與日後加入權限驗證
+
+**MVP 階段：** API 層先建立骨架，實際整合邏輯待外部系統就緒後再實作。
+
+---
+
+## 5. 技術元件協作總覽
+
+```
+使用者操作          前端技術                   後端技術              資料儲存
+──────────       ─────────────            ──────────          ──────────
+開始錄音     →   MediaRecorder.start()
+看到波形     ←   AnalyserNode + Canvas
+點標記按鈕   →   JS 暫存至陣列
+看到計時     ←   setInterval + DOM
+停止錄音     →   MediaRecorder.stop()
+輸入標題     →   HTML Form
+點選儲存     →   fetch() POST           →  Flask Route       → SQLite + 檔案
+                                           ↓
+                                        Model.create()
+                                           ↓
+查看回顧     ←   HTML 頁面              ←  Jinja2 Template   ← SQLite 查詢
+點標記跳轉   →   Audio.currentTime = t
+```
+
+---
+
+> **下一步：** 架構確認後，請進入流程圖設計階段（`/flowchart`），將使用者操作路徑視覺化。

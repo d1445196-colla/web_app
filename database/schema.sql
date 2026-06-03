@@ -1,62 +1,114 @@
--- ============================================================
--- 語音轉寫與 API 整合系統 — SQLite Schema
--- ============================================================
--- 執行方式：sqlite3 instance/database.db < database/schema.sql
--- ============================================================
+-- ============================================
+-- 即時標記錄音系統 + 語音轉寫系統 — 資料庫 Schema
+-- 資料庫引擎：SQLite
+-- ============================================
 
--- 啟用外鍵約束（SQLite 預設關閉）
+-- 啟用外鍵約束（SQLite 預設不啟用）
 PRAGMA foreign_keys = ON;
 
--- -----------------------------------------------------------
--- 1. recordings — 錄音紀錄表
--- -----------------------------------------------------------
+-- ============================================
+-- 【錄音系統】1. marker_types（標記種類）
+-- ============================================
+CREATE TABLE IF NOT EXISTS marker_types (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT    NOT NULL,
+    color       TEXT    NOT NULL DEFAULT '#e94560',
+    icon        TEXT    NOT NULL DEFAULT '🏷',
+    is_default  INTEGER NOT NULL DEFAULT 0,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+-- ============================================
+-- 【錄音系統】2. recordings（錄音紀錄）
+-- ============================================
 CREATE TABLE IF NOT EXISTS recordings (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    original_filename TEXT    NOT NULL,                          -- 原始上傳檔名
-    stored_filename   TEXT    NOT NULL,                          -- UUID 重新命名後的檔名
-    file_path         TEXT    NOT NULL,                          -- 伺服器端儲存路徑
-    file_size         INTEGER NOT NULL,                          -- 檔案大小 (bytes)
-    mime_type         TEXT    NOT NULL,                          -- MIME 類型
-    duration          REAL    DEFAULT NULL,                      -- 音訊時長 (秒)
-    full_text         TEXT    DEFAULT NULL,                      -- 完整轉寫文字
-    status            TEXT    NOT NULL DEFAULT 'pending',        -- pending/processing/completed/failed
-    error_message     TEXT    DEFAULT NULL,                      -- 錯誤訊息
-    language          TEXT    DEFAULT NULL,                      -- 偵測到的語言代碼
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    title         TEXT    NOT NULL,
+    filepath      TEXT    NOT NULL,
+    duration_sec  INTEGER NOT NULL DEFAULT 0,
+    category      TEXT,
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_recordings_created_at ON recordings(created_at);
+
+-- ============================================
+-- 【錄音系統】3. markers（標記）
+-- ============================================
+CREATE TABLE IF NOT EXISTS markers (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    recording_id   INTEGER NOT NULL,
+    type_id        INTEGER NOT NULL,
+    timestamp_sec  INTEGER NOT NULL,
+    note           TEXT,
+    created_at     TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+
+    FOREIGN KEY (recording_id) REFERENCES recordings(id) ON DELETE CASCADE,
+    FOREIGN KEY (type_id)      REFERENCES marker_types(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_markers_recording_id ON markers(recording_id);
+CREATE INDEX IF NOT EXISTS idx_markers_type_id ON markers(type_id);
+
+-- ============================================
+-- 【錄音系統】4. 預設資料（Seed Data）
+-- ============================================
+INSERT OR IGNORE INTO marker_types (name, color, icon, is_default, sort_order) VALUES
+    ('關鍵重點', '#e94560', '🔑', 1, 1),
+    ('故事',     '#0f3460', '📖', 1, 2),
+    ('不清晰',   '#f39c12', '❓', 1, 3),
+    ('行動項目', '#2ecc71', '⚡', 1, 4),
+    ('靈感',     '#9b59b6', '💡', 1, 5);
+
+-- ============================================
+-- 【轉寫系統】5. transcriptions（轉寫紀錄）
+-- ============================================
+CREATE TABLE IF NOT EXISTS transcriptions (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    original_filename TEXT    NOT NULL,
+    stored_filename   TEXT    NOT NULL,
+    file_path         TEXT    NOT NULL,
+    file_size         INTEGER NOT NULL,
+    mime_type         TEXT    NOT NULL,
+    duration          REAL    DEFAULT NULL,
+    full_text         TEXT    DEFAULT NULL,
+    status            TEXT    NOT NULL DEFAULT 'pending',
+    error_message     TEXT    DEFAULT NULL,
+    language          TEXT    DEFAULT NULL,
     created_at        TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
     completed_at      TEXT    DEFAULT NULL
 );
 
--- -----------------------------------------------------------
--- 2. segments — 轉寫段落表
--- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS segments (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    recording_id    INTEGER NOT NULL,                            -- 所屬錄音紀錄
-    segment_index   INTEGER NOT NULL,                            -- 段落順序索引
-    start_time      REAL    NOT NULL,                            -- 起始時間 (秒)
-    end_time        REAL    NOT NULL,                            -- 結束時間 (秒)
-    text            TEXT    NOT NULL,                            -- 轉寫文字
+-- ============================================
+-- 【轉寫系統】6. transcription_segments（轉寫段落）
+-- ============================================
+CREATE TABLE IF NOT EXISTS transcription_segments (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    transcription_id  INTEGER NOT NULL,
+    segment_index     INTEGER NOT NULL,
+    start_time        REAL    NOT NULL,
+    end_time          REAL    NOT NULL,
+    text              TEXT    NOT NULL,
 
-    FOREIGN KEY (recording_id) REFERENCES recordings(id) ON DELETE CASCADE
+    FOREIGN KEY (transcription_id) REFERENCES transcriptions(id) ON DELETE CASCADE
 );
 
--- 建立索引：加速依 recording_id 查詢段落
-CREATE INDEX IF NOT EXISTS idx_segments_recording_id ON segments(recording_id);
+CREATE INDEX IF NOT EXISTS idx_tseg_transcription_id ON transcription_segments(transcription_id);
 
--- -----------------------------------------------------------
--- 3. markers — 即時標記表
--- -----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS markers (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    recording_id    INTEGER NOT NULL,                            -- 所屬錄音紀錄
-    segment_id      INTEGER DEFAULT NULL,                        -- 對齊到的段落 (轉寫後填入)
-    marker_time     REAL    NOT NULL,                            -- 標記時間點 (秒)
-    label           TEXT    DEFAULT '',                           -- 標記備註文字
-    created_at      TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+-- ============================================
+-- 【轉寫系統】7. transcription_markers（轉寫標記）
+-- ============================================
+CREATE TABLE IF NOT EXISTS transcription_markers (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    transcription_id  INTEGER NOT NULL,
+    segment_id        INTEGER DEFAULT NULL,
+    marker_time       REAL    NOT NULL,
+    label             TEXT    DEFAULT '',
+    created_at        TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
 
-    FOREIGN KEY (recording_id) REFERENCES recordings(id) ON DELETE CASCADE,
-    FOREIGN KEY (segment_id)   REFERENCES segments(id)   ON DELETE SET NULL
+    FOREIGN KEY (transcription_id) REFERENCES transcriptions(id) ON DELETE CASCADE,
+    FOREIGN KEY (segment_id)       REFERENCES transcription_segments(id) ON DELETE SET NULL
 );
 
--- 建立索引：加速依 recording_id 查詢標記
-CREATE INDEX IF NOT EXISTS idx_markers_recording_id ON markers(recording_id);
+CREATE INDEX IF NOT EXISTS idx_tmarker_transcription_id ON transcription_markers(transcription_id);

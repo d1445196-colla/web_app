@@ -1,2 +1,39 @@
-<!-- base.html placeholder -->
-<!-- TODO: 步驟四實作 -->
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}首頁{% endblock %} - 即時標記錄音系統</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- 導覽列 -->
+    <nav>
+        <a href="{{ url_for('main.index') }}">🎙 即時標記錄音系統</a>
+        <ul>
+            <li><a href="{{ url_for('main.index') }}">錄音</a></li>
+            <li><a href="{{ url_for('recording.list_recordings') }}">錄音列表</a></li>
+            <li><a href="{{ url_for('marker.list_marker_types') }}">標記種類設定</a></li>
+            <li><a href="{{ url_for('upload.upload_page') }}">語音轉寫</a></li>
+            <li><a href="{{ url_for('transcription.history') }}">轉寫紀錄</a></li>
+        </ul>
+    </nav>
+
+    <!-- Flash 訊息 -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- 主要內容 -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

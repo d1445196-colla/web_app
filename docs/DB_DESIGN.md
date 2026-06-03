@@ -1,47 +1,44 @@
-# 資料庫設計文件：語音轉寫與 API 整合系統
+# 資料庫設計 — 即時標記錄音系統
 
-本文件根據 PRD 與系統架構文件，定義系統所需的 SQLite 資料表結構、欄位說明與關聯關係。
+> **文件版本：** v1.0
+> **建立日期：** 2026-05-19
+> **依據文件：** [PRD.md](PRD.md)、[ARCHITECTURE.md](ARCHITECTURE.md)、[FLOWCHART.md](FLOWCHART.md)
+
+---
 
 ## 1. ER 圖（實體關係圖）
 
 ```mermaid
 erDiagram
-    RECORDINGS ||--o{ SEGMENTS : "包含多個轉寫段落"
-    RECORDINGS ||--o{ MARKERS : "包含多個即時標記"
-    SEGMENTS ||--o{ MARKERS : "標記對齊至段落"
+    RECORDINGS ||--o{ MARKERS : "擁有多個標記"
+    MARKER_TYPES ||--o{ MARKERS : "被多個標記引用"
 
     RECORDINGS {
         int id PK "主鍵，自動遞增"
-        text original_filename "原始上傳檔案名稱"
-        text stored_filename "UUID 重新命名後的儲存檔名"
-        text file_path "音訊檔案在伺服器上的儲存路徑"
-        int file_size "檔案大小 (bytes)"
-        text mime_type "檔案 MIME 類型"
-        real duration "音訊總時長 (秒)"
-        text full_text "Whisper 回傳的完整轉寫文字"
-        text status "處理狀態: pending / processing / completed / failed"
-        text error_message "失敗時的錯誤訊息"
-        text language "Whisper 偵測到的語言代碼"
-        text created_at "建立時間 (ISO 8601)"
-        text completed_at "轉寫完成時間 (ISO 8601)"
-    }
-
-    SEGMENTS {
-        int id PK "主鍵，自動遞增"
-        int recording_id FK "所屬錄音紀錄 ID"
-        int segment_index "段落在轉寫結果中的順序索引"
-        real start_time "段落起始時間 (秒)"
-        real end_time "段落結束時間 (秒)"
-        text text "該段落的轉寫文字內容"
+        text title "錄音標題"
+        text filepath "音訊檔案路徑"
+        int duration_sec "錄音時長（秒）"
+        text category "錄音分類"
+        text created_at "建立時間 ISO 格式"
     }
 
     MARKERS {
         int id PK "主鍵，自動遞增"
-        int recording_id FK "所屬錄音紀錄 ID"
-        int segment_id FK "對齊到的轉寫段落 ID (可為 NULL)"
-        real marker_time "標記的時間點 (秒)"
-        text label "標記的文字備註"
-        text created_at "標記建立時間 (ISO 8601)"
+        int recording_id FK "所屬錄音 ID"
+        int type_id FK "標記種類 ID"
+        int timestamp_sec "標記時間戳（秒）"
+        text note "備註（可為空）"
+        text created_at "建立時間 ISO 格式"
+    }
+
+    MARKER_TYPES {
+        int id PK "主鍵，自動遞增"
+        text name "種類名稱"
+        text color "顯示顏色（HEX）"
+        text icon "圖示（Emoji）"
+        int is_default "是否為預設種類"
+        int sort_order "排序順序"
+        text created_at "建立時間 ISO 格式"
     }
 ```
 
@@ -49,64 +46,103 @@ erDiagram
 
 ## 2. 資料表詳細說明
 
-### 2.1 `recordings` — 錄音紀錄表
+### 2.1 recordings（錄音紀錄）
 
-儲存每一次音訊上傳的基本資訊與轉寫處理狀態。
+儲存每一次錄音的後設資料與檔案路徑。
 
 | 欄位 | 型別 | 必填 | 預設值 | 說明 |
-|---|---|:---:|---|---|
-| `id` | INTEGER | ✅ | AUTOINCREMENT | 主鍵 |
-| `original_filename` | TEXT | ✅ | — | 使用者上傳時的原始檔案名稱 |
-| `stored_filename` | TEXT | ✅ | — | UUID 重新命名後的檔名，防止衝突與路徑穿越 |
-| `file_path` | TEXT | ✅ | — | 檔案在 `instance/uploads/` 中的完整路徑 |
-| `file_size` | INTEGER | ✅ | — | 檔案大小（位元組） |
-| `mime_type` | TEXT | ✅ | — | 檔案的 MIME 類型（如 `audio/mpeg`） |
-| `duration` | REAL | ❌ | NULL | 音訊總時長（秒），由 Whisper 回傳後更新 |
-| `full_text` | TEXT | ❌ | NULL | Whisper 回傳的完整逐字稿文字 |
-| `status` | TEXT | ✅ | `'pending'` | 處理狀態：`pending` → `processing` → `completed` / `failed` |
-| `error_message` | TEXT | ❌ | NULL | 轉寫失敗時的錯誤原因說明 |
-| `language` | TEXT | ❌ | NULL | Whisper 偵測到的語言代碼（如 `zh`） |
-| `created_at` | TEXT | ✅ | `CURRENT_TIMESTAMP` | 紀錄建立時間（ISO 8601 格式） |
-| `completed_at` | TEXT | ❌ | NULL | 轉寫完成時間（ISO 8601 格式） |
+|------|------|------|--------|------|
+| `id` | INTEGER | ✅ | 自動遞增 | 主鍵（PK） |
+| `title` | TEXT | ✅ | — | 錄音標題（使用者輸入，預設為日期時間） |
+| `filepath` | TEXT | ✅ | — | 音訊檔案相對路徑（如 `uploads/rec_20260519.webm`） |
+| `duration_sec` | INTEGER | ✅ | 0 | 錄音總時長（秒） |
+| `category` | TEXT | ❌ | NULL | 錄音分類標籤（使用者自訂） |
+| `created_at` | TEXT | ✅ | CURRENT_TIMESTAMP | 建立時間（ISO 8601 格式） |
+
+**索引：**
+- `id`（Primary Key）
+- `created_at`（用於排序查詢）
 
 ---
 
-### 2.2 `segments` — 轉寫段落表
+### 2.2 markers（標記）
 
-儲存 Whisper API 回傳的每一個句子段落，包含起止時間與文字內容。
+儲存每個錄音中使用者標記的時間點與備註。
 
 | 欄位 | 型別 | 必填 | 預設值 | 說明 |
-|---|---|:---:|---|---|
-| `id` | INTEGER | ✅ | AUTOINCREMENT | 主鍵 |
-| `recording_id` | INTEGER | ✅ | — | 外鍵，關聯至 `recordings.id` |
-| `segment_index` | INTEGER | ✅ | — | 段落在轉寫結果中的順序（從 0 開始） |
-| `start_time` | REAL | ✅ | — | 段落起始時間（秒） |
-| `end_time` | REAL | ✅ | — | 段落結束時間（秒） |
-| `text` | TEXT | ✅ | — | 該段落轉寫出的文字內容 |
+|------|------|------|--------|------|
+| `id` | INTEGER | ✅ | 自動遞增 | 主鍵（PK） |
+| `recording_id` | INTEGER | ✅ | — | 所屬錄音 ID（FK → recordings.id） |
+| `type_id` | INTEGER | ✅ | — | 標記種類 ID（FK → marker_types.id） |
+| `timestamp_sec` | INTEGER | ✅ | — | 標記對應的錄音時間（秒） |
+| `note` | TEXT | ❌ | NULL | 使用者輸入的簡短備註 |
+| `created_at` | TEXT | ✅ | CURRENT_TIMESTAMP | 建立時間（ISO 8601 格式） |
 
-**關聯**：`recording_id` → `recordings.id`（多對一），刪除錄音時級聯刪除所有段落。
+**索引：**
+- `id`（Primary Key）
+- `recording_id`（用於查詢某錄音的所有標記）
+- `type_id`（用於依種類篩選）
+
+**外鍵關聯：**
+- `recording_id` → `recordings.id`（CASCADE DELETE：刪除錄音時一併刪除所有標記）
+- `type_id` → `marker_types.id`（RESTRICT：不允許刪除仍被引用的標記種類）
 
 ---
 
-### 2.3 `markers` — 即時標記表
+### 2.3 marker_types（標記種類）
 
-儲存前端錄音時使用者按下的即時標記時間點，以及對齊到的轉寫段落。
+儲存系統預設與使用者自訂的標記種類定義。
 
 | 欄位 | 型別 | 必填 | 預設值 | 說明 |
-|---|---|:---:|---|---|
-| `id` | INTEGER | ✅ | AUTOINCREMENT | 主鍵 |
-| `recording_id` | INTEGER | ✅ | — | 外鍵，關聯至 `recordings.id` |
-| `segment_id` | INTEGER | ❌ | NULL | 外鍵，對齊到的轉寫段落 `segments.id`。轉寫完成後由對齊邏輯填入 |
-| `marker_time` | REAL | ✅ | — | 標記的時間點（秒），相對於錄音開始時間 |
-| `label` | TEXT | ❌ | `''` | 使用者為該標記添加的文字備註 |
-| `created_at` | TEXT | ✅ | `CURRENT_TIMESTAMP` | 標記建立時間（ISO 8601 格式） |
+|------|------|------|--------|------|
+| `id` | INTEGER | ✅ | 自動遞增 | 主鍵（PK） |
+| `name` | TEXT | ✅ | — | 種類名稱（如「關鍵重點」、「故事」） |
+| `color` | TEXT | ✅ | `#e94560` | 顯示顏色（HEX 色碼） |
+| `icon` | TEXT | ✅ | `🏷` | 圖示（Emoji 字元） |
+| `is_default` | INTEGER | ✅ | 0 | 是否為系統預設種類（1=是, 0=否） |
+| `sort_order` | INTEGER | ✅ | 0 | 排序順序（數字越小越前面） |
+| `created_at` | TEXT | ✅ | CURRENT_TIMESTAMP | 建立時間（ISO 8601 格式） |
 
-**關聯**：
-- `recording_id` → `recordings.id`（多對一），刪除錄音時級聯刪除所有標記。
-- `segment_id` → `segments.id`（多對一，可為 NULL），若標記時間點未落入任何段落區間則為 NULL。
+**索引：**
+- `id`（Primary Key）
+- `sort_order`（用於排序顯示）
+
+**預設資料（Seed Data）：**
+
+| id | name | color | icon | is_default | sort_order |
+|----|------|-------|------|------------|------------|
+| 1 | 關鍵重點 | `#e94560` | 🔑 | 1 | 1 |
+| 2 | 故事 | `#0f3460` | 📖 | 1 | 2 |
+| 3 | 不清晰 | `#f39c12` | ❓ | 1 | 3 |
+| 4 | 行動項目 | `#2ecc71` | ⚡ | 1 | 4 |
+| 5 | 靈感 | `#9b59b6` | 💡 | 1 | 5 |
 
 ---
 
-## 3. SQL 建表語法
+## 3. 資料表關聯說明
 
-完整的 SQLite 建表 SQL 請參見 [`database/schema.sql`](../database/schema.sql)。
+```
+marker_types (1) ──────< (N) markers (N) >────── (1) recordings
+    │                          │                        │
+    │  一個標記種類             │  一個標記               │  一個錄音
+    │  可被多個標記引用         │  屬於一個錄音            │  可擁有多個標記
+    │                          │  引用一個標記種類         │
+```
+
+- **recordings → markers**：一對多（One-to-Many）
+  - 一個錄音可以有 0 到多個標記
+  - 刪除錄音時，級聯刪除所有標記（CASCADE）
+
+- **marker_types → markers**：一對多（One-to-Many）
+  - 一個標記種類可被多個標記引用
+  - 不允許刪除仍被使用的標記種類（RESTRICT）
+
+---
+
+## 4. SQL 建表語法
+
+完整的 SQL 建表語法已儲存於 `database/schema.sql`，請參閱該檔案。
+
+---
+
+> **下一步：** 資料庫設計確認後，請進入路由設計階段（`/api-design`）。
