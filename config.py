@@ -1,18 +1,26 @@
 # config.py
-# 應用程式設定 — 集中管理所有設定值
+# 系統設定檔 — 整合錄音系統與語音轉寫系統
 
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-
-
 class Config:
-    """Flask 應用程式設定。"""
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')
+    # Flask Session Secret Key
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-recording-secret-key-12345'
+    
+    # 專案根目錄
+    BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+    
+    # SQLite 資料庫檔案路徑
     DATABASE = os.path.join(BASE_DIR, 'instance', 'database.db')
-    UPLOAD_FOLDER = os.path.join(BASE_DIR, 'instance', 'uploads')
-    MAX_CONTENT_LENGTH = 25 * 1024 * 1024  # 25MB 上限
+    
+    # 錄音檔案上傳儲存目錄
+    UPLOAD_FOLDER = os.path.join(BASE_DIR, 'app', 'static', 'uploads')
+    
+    # 限制上傳最大容量 (100MB)
+    MAX_CONTENT_LENGTH = 100 * 1024 * 1024
+
+    # OpenAI API Key (轉寫系統使用)
     OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')

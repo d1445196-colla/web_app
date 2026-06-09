@@ -25,3 +25,4 @@ def index():
     """
     marker_types = MarkerType.get_all()
     return render_template('index.html', marker_types=marker_types)
+

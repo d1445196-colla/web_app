@@ -1,74 +1,74 @@
 // app/static/js/timer.js
-// 錄音秒錶計時器控制
+// 計時器模組 — 負責錄音計時與格式化顯示
 
-window.RecordingTimer = (function() {
-    let startTime = 0;
-    let elapsedMs = 0;
-    let timerInterval = null;
-    let onTickCallback = null;
+class RecordingTimer {
+    constructor(displayElementId) {
+        this.displayElement = document.getElementById(displayElementId);
+        this.seconds = 0;
+        this.intervalId = null;
+        this.isRunning = false;
+    }
 
-    function formatTime(totalSeconds) {
-        const hrs = Math.floor(totalSeconds / 3600);
-        const mins = Math.floor((totalSeconds % 3600) / 60);
-        const secs = totalSeconds % 60;
-        return [
+    start() {
+        if (this.isRunning) return;
+        this.isRunning = true;
+        this.intervalId = setInterval(() => {
+            this.seconds++;
+            this.updateDisplay();
+        }, 1000);
+        
+        if (this.displayElement) {
+            this.displayElement.classList.add('recording');
+            this.displayElement.classList.remove('paused');
+        }
+    }
+
+    pause() {
+        if (!this.isRunning) return;
+        this.isRunning = false;
+        clearInterval(this.intervalId);
+        this.intervalId = null;
+        
+        if (this.displayElement) {
+            this.displayElement.classList.remove('recording');
+            this.displayElement.classList.add('paused');
+        }
+    }
+
+    resume() {
+        this.start();
+    }
+
+    stop() {
+        this.pause();
+    }
+
+    reset() {
+        this.stop();
+        this.seconds = 0;
+        this.updateDisplay();
+        if (this.displayElement) {
+            this.displayElement.classList.remove('recording', 'paused');
+        }
+    }
+
+    getSeconds() {
+        return this.seconds;
+    }
+
+    updateDisplay() {
+        if (!this.displayElement) return;
+        
+        const hrs = Math.floor(this.seconds / 3600);
+        const mins = Math.floor((this.seconds % 3600) / 60);
+        const secs = this.seconds % 60;
+        
+        const formatted = [
             hrs.toString().padStart(2, '0'),
             mins.toString().padStart(2, '0'),
             secs.toString().padStart(2, '0')
         ].join(':');
+        
+        this.displayElement.textContent = formatted;
     }
-
-    function updateDisplay() {
-        const display = document.getElementById('timer-display');
-        if (display) {
-            const seconds = Math.floor(elapsedMs / 1000);
-            display.textContent = formatTime(seconds);
-        }
-    }
-
-    return {
-        start: function(onTick) {
-            if (timerInterval) return;
-            startTime = Date.now() - elapsedMs;
-            onTickCallback = onTick;
-            timerInterval = setInterval(() => {
-                elapsedMs = Date.now() - startTime;
-                updateDisplay();
-                if (onTickCallback) {
-                    onTickCallback(Math.floor(elapsedMs / 1000));
-                }
-            }, 100);
-            
-            const timerDisplay = document.getElementById('timer-display');
-            if (timerDisplay) {
-                timerDisplay.className = 'duration-timer recording';
-            }
-        },
-        pause: function() {
-            if (!timerInterval) return;
-            clearInterval(timerInterval);
-            timerInterval = null;
-            
-            const timerDisplay = document.getElementById('timer-display');
-            if (timerDisplay) {
-                timerDisplay.className = 'duration-timer paused';
-            }
-        },
-        stop: function() {
-            this.pause();
-        },
-        reset: function() {
-            this.pause();
-            elapsedMs = 0;
-            updateDisplay();
-            
-            const timerDisplay = document.getElementById('timer-display');
-            if (timerDisplay) {
-                timerDisplay.className = 'duration-timer';
-            }
-        },
-        getDurationSeconds: function() {
-            return Math.floor(elapsedMs / 1000);
-        }
-    };
-})();
+}

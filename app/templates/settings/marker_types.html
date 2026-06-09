@@ -3,124 +3,115 @@
 {% block title %}標記種類管理{% endblock %}
 
 {% block content %}
-<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem;">
+<div class="settings-container">
+    
     <!-- 左側：新增標記種類表單 -->
-    <div style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 16px; padding: 1.5rem; height: fit-content;">
-        <h2 style="margin-bottom: 1.5rem;">🆕 新增標記種類</h2>
-        <form action="{{ url_for('marker.create_marker_type') }}" method="POST">
+    <div class="panel">
+        <h2>新增標記種類</h2>
+        <form action="{{ url_for('marker.create_marker_type') }}" method="POST" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 1.2rem;">
             <div class="form-group">
-                <label for="name">種類名稱</label>
-                <input type="text" class="form-control" id="name" name="name" required placeholder="例如：靈感、待辦事項">
+                <label for="new-name">種類名稱</label>
+                <input type="text" name="name" id="new-name" class="form-control" placeholder="例如：關鍵重點、問題" required>
             </div>
             
             <div class="form-group">
-                <label for="icon">圖示 (單個 Emoji)</label>
-                <input type="text" class="form-control" id="icon" name="icon" required placeholder="例如：💡、🚀、⭐" value="🏷">
+                <label for="new-icon">代表圖示 (Emoji)</label>
+                <input type="text" name="icon" id="new-icon" class="form-control" placeholder="例如：🔑、❓、💡" required>
             </div>
 
             <div class="form-group">
-                <label for="color">代表顏色</label>
-                <input type="color" class="form-control" id="color" name="color" value="#e94560" style="padding: 0.2rem; height: 42px;">
+                <label for="new-color">顯示顏色</label>
+                <input type="color" name="color" id="new-color" class="form-control" style="height: 45px; padding: 0.2rem;" value="#e94560">
             </div>
-
-            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">建立標記種類</button>
+            
+            <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem;">新增標記種類</button>
         </form>
     </div>
 
-    <!-- 右側：已存在的種類列表 -->
-    <div style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 16px; padding: 1.5rem;">
-        <h2 style="margin-bottom: 1.5rem;">⚙ 標記種類列表</h2>
-        
-        <table style="width: 100%; border-collapse: collapse; text-align: left;" class="marker-types-table">
-            <thead>
-                <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.9rem;">
-                    <th style="padding: 0.75rem;">圖示</th>
-                    <th style="padding: 0.75rem;">名稱</th>
-                    <th style="padding: 0.75rem;">代表顏色</th>
-                    <th style="padding: 0.75rem; text-align: center;">已使用次數</th>
-                    <th style="padding: 0.75rem; text-align: right;">操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in marker_types %}
-                    {% set mt = item.type %}
-                    <!-- 檢視模式行 -->
-                    <tr id="row-view-{{ mt.id }}" style="border-bottom: 1px solid rgba(255,255,255,0.03); vertical-align: middle;">
-                        <td style="padding: 1rem 0.75rem; font-size: 1.5rem;">{{ mt.icon }}</td>
-                        <td style="padding: 1rem 0.75rem; font-weight: 600;">{{ mt.name }}</td>
-                        <td style="padding: 1rem 0.75rem;">
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span style="display: inline-block; width: 14px; height: 14px; border-radius: 50%; background-color: {{ mt.color }}; border: 1px solid rgba(255,255,255,0.2);"></span>
-                                <code style="font-size: 0.85rem; color: var(--text-secondary);">{{ mt.color }}</code>
-                            </div>
+    <!-- 右側：現有標記種類列表 -->
+    <div class="panel">
+        <h2>現有標記種類</h2>
+        <div style="overflow-x: auto;">
+            <table class="types-table">
+                <thead>
+                    <tr>
+                        <th>圖示</th>
+                        <th>名稱</th>
+                        <th>顏色</th>
+                        <th>使用次數</th>
+                        <th>管理操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for mt in marker_types %}
+                    <tr>
+                        <!-- 顯示 -->
+                        <td id="display-icon-{{ mt.id }}" style="font-size: 1.3rem;">{{ mt.icon }}</td>
+                        <td id="display-name-{{ mt.id }}" style="font-weight: 600;">{{ mt.name }}</td>
+                        <td id="display-color-{{ mt.id }}">
+                            <span class="color-preview" style="background-color: {{ mt.color }}; margin-right: 0.5rem;"></span>
+                            <code>{{ mt.color }}</code>
                         </td>
-                        <td style="padding: 1rem 0.75rem; text-align: center;">
-                            <span class="category-badge" style="background-color: var(--secondary)15; color: var(--secondary);">{{ item.usage_count }}</span>
-                        </td>
-                        <td style="padding: 1rem 0.75rem; text-align: right;">
-                            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                                <button type="button" class="btn btn-secondary btn-edit-type" data-id="{{ mt.id }}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">編輯</button>
+                        <td>{{ mt.usage_count }} 次引用</td>
+                        <td>
+                            <div id="btn-group-{{ mt.id }}" style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="toggleEditRow({{ mt.id }})">編輯</button>
+                                
                                 {% if not mt.is_default %}
-                                <form action="{{ url_for('marker.delete_marker_type', id=mt.id) }}" method="POST" onsubmit="return confirm('確定要刪除此標記種類嗎？刪除後無法復原。');" style="display: inline;">
+                                <form action="{{ url_for('marker.delete_marker_type', id=mt.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('確定要刪除「{{ mt.name }}」這個標記種類嗎？');">
                                     <button type="submit" class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">刪除</button>
                                 </form>
+                                {% else %}
+                                <span style="font-size: 0.8rem; color: var(--text-secondary); line-height: 2.2;">（系統預設）</span>
                                 {% endif %}
                             </div>
                         </td>
                     </tr>
                     
-                    <!-- 內聯編輯模式行 (預設隱藏) -->
-                    <tr id="row-edit-{{ mt.id }}" style="border-bottom: 1px solid var(--primary)30; background-color: rgba(255,255,255,0.01); display: none; vertical-align: middle;">
-                        <td colspan="5" style="padding: 1rem;">
-                            <form action="{{ url_for('marker.update_marker_type', id=mt.id) }}" method="POST" style="display: flex; gap: 1rem; align-items: center; width: 100%;">
-                                <div style="width: 80px;">
-                                    <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.2rem;">圖示</label>
-                                    <input type="text" class="form-control" name="icon" value="{{ mt.icon }}" required style="padding: 0.4rem; text-align: center;">
+                    <!-- 隱藏的編輯行（行內編輯表單） -->
+                    <tr id="edit-row-{{ mt.id }}" style="display: none; background-color: rgba(255, 255, 255, 0.02);">
+                        <form action="{{ url_for('marker.update_marker_type', id=mt.id) }}" method="POST">
+                            <td>
+                                <input type="text" name="icon" class="form-control" value="{{ mt.icon }}" style="width: 50px; font-size: 1.1rem; padding: 0.4rem; text-align: center;" required>
+                            </td>
+                            <td>
+                                <input type="text" name="name" class="form-control" value="{{ mt.name }}" style="padding: 0.4rem;" required>
+                            </td>
+                            <td>
+                                <input type="color" name="color" class="form-control" value="{{ mt.color }}" style="height: 35px; width: 60px; padding: 0.1rem;">
+                            </td>
+                            <td>—</td>
+                            <td>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button type="submit" class="btn btn-primary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">確定</button>
+                                    <button type="button" class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="toggleEditRow({{ mt.id }})">取消</button>
                                 </div>
-                                <div style="flex: 2;">
-                                    <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.2rem;">名稱</label>
-                                    <input type="text" class="form-control" name="name" value="{{ mt.name }}" required style="padding: 0.4rem;">
-                                </div>
-                                <div style="width: 100px;">
-                                    <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.2rem;">代表色</label>
-                                    <input type="color" class="form-control" name="color" value="{{ mt.color }}" style="padding: 0.1rem; height: 35px;">
-                                </div>
-                                <div style="display: flex; gap: 0.5rem; margin-top: 1.2rem; margin-left: auto;">
-                                    <button type="button" class="btn btn-secondary btn-cancel-type-edit" data-id="{{ mt.id }}" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">取消</button>
-                                    <button type="submit" class="btn btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">儲存</button>
-                                </div>
-                            </form>
-                        </td>
+                            </td>
+                        </form>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // 切換到編輯模式
-        document.querySelectorAll('.btn-edit-type').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const id = this.getAttribute('data-id');
-                document.getElementById(`row-view-${id}`).style.display = 'none';
-                
-                // 表格中的 tr block 顯示要用 table-row
-                document.getElementById(`row-edit-${id}`).style.display = 'table-row';
-            });
-        });
-
-        // 取消編輯
-        document.querySelectorAll('.btn-cancel-type-edit').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const id = this.getAttribute('data-id');
-                document.getElementById(`row-view-${id}`).style.display = 'table-row';
-                document.getElementById(`row-edit-${id}`).style.display = 'none';
-            });
-        });
-    });
+    function toggleEditRow(id) {
+        const displayIcon = document.getElementById(`display-icon-${id}`).parentElement;
+        const editRow = document.getElementById(`edit-row-${id}`);
+        
+        if (editRow.style.display === 'none') {
+            editRow.style.display = 'table-row';
+            displayIcon.style.opacity = '0.3';
+            displayIcon.querySelectorAll('button, form button').forEach(btn => btn.disabled = true);
+        } else {
+            editRow.style.display = 'none';
+            displayIcon.style.opacity = '1';
+            displayIcon.querySelectorAll('button, form button').forEach(btn => btn.disabled = false);
+        }
+    }
 </script>
 {% endblock %}

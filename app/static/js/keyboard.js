@@ -1,40 +1,50 @@
 // app/static/js/keyboard.js
-// 錄音鍵盤快捷鍵控制
+// 鍵盤快捷鍵模組 — 負責監聽全域鍵盤操作，提昇錄音時的操作便利性
 
-document.addEventListener('DOMContentLoaded', function() {
-    document.addEventListener('keydown', function(e) {
-        // 如果使用者正在輸入文字 (例如在儲存對話框的 input 中)，不觸發快捷鍵
-        const activeElem = document.activeElement;
-        if (activeElem && (
-            activeElem.tagName === 'INPUT' || 
-            activeElem.tagName === 'TEXTAREA' || 
-            activeElem.isContentEditable
-        )) {
-            return;
-        }
+class KeyboardShortcutManager {
+    constructor(callbacks) {
+        this.callbacks = callbacks || {}; // 包含: onSpace, onNumber(numKey)
+        this.enabled = true;
+        this.init();
+    }
 
-        // 檢查全域錄音控制器是否存在
-        if (!window.RecorderControl) return;
+    init() {
+        document.addEventListener('keydown', (e) => {
+            if (!this.enabled) return;
 
-        // 1. 空白鍵：暫停 / 繼續
-        if (e.key === ' ' || e.code === 'Space') {
-            if (window.RecorderControl.isRecording()) {
-                e.preventDefault(); // 阻止空白鍵捲動網頁
-                if (window.RecorderControl.isPaused()) {
-                    window.RecorderControl.resume();
-                } else {
-                    window.RecorderControl.pause();
+            // 如果使用者正在輸入文字（如在 input 或 textarea 中），不要觸發快捷鍵
+            const activeEl = document.activeElement;
+            if (activeEl && (
+                activeEl.tagName === 'INPUT' || 
+                activeEl.tagName === 'TEXTAREA' || 
+                activeEl.isContentEditable
+            )) {
+                return;
+            }
+
+            const key = e.key;
+
+            if (key === ' ') {
+                // 空白鍵暫停/繼續
+                e.preventDefault(); // 防止網頁捲動
+                if (this.callbacks.onSpace) {
+                    this.callbacks.onSpace();
+                }
+            } else if (/^[1-9]$/.test(key)) {
+                // 數字鍵 1-9 快速標記
+                const num = parseInt(key);
+                if (this.callbacks.onNumber) {
+                    this.callbacks.onNumber(num);
                 }
             }
-        }
+        });
+    }
 
-        // 2. 數字鍵 1-5：快速標記
-        if (e.key >= '1' && e.key <= '5') {
-            if (window.RecorderControl.isRecording() && !window.RecorderControl.isPaused()) {
-                e.preventDefault();
-                const index = parseInt(e.key);
-                window.RecorderControl.clickMarker(index);
-            }
-        }
-    });
-});
+    enable() {
+        this.enabled = true;
+    }
+
+    disable() {
+        this.enabled = false;
+    }
+}
