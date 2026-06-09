@@ -6,3 +6,8 @@ from app.models.marker import Marker
 from app.models.marker_type import MarkerType
 
 __all__ = ['Recording', 'Marker', 'MarkerType']
+
+# 【轉寫系統】Models
+from app.models import transcription
+from app.models import transcription_segment
+from app.models import transcription_marker

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}轉寫結果 - {{ recording.original_filename }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .result-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+    }
+    
+    @media (max-width: 900px) {
+        .result-container {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    .panel {
+        background: var(--bg-panel);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 2rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    
+    .meta-box {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .segment-item {
+        padding: 0.75rem;
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+        transition: background-color 0.2s ease;
+    }
+    
+    .segment-item:hover {
+        background: rgba(255, 255, 255, 0.02);
+    }
+    
+    .segment-time {
+        font-family: monospace;
+        color: var(--secondary);
+        font-weight: 600;
+        font-size: 0.85rem;
+        margin-bottom: 0.25rem;
+        display: inline-block;
+    }
+    
+    .aligned-marker-item {
+        background: rgba(244, 63, 94, 0.03);
+        border: 1px solid rgba(244, 63, 94, 0.15);
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <div>
+        <h1 style="margin-bottom: 0.5rem; font-family: 'Outfit', sans-serif;">📝 語音辨識轉寫結果</h1>
+        <p style="color: var(--text-secondary);">轉寫記錄已完成，已自動將時間標記對齊至最接近的說話段落。</p>
+    </div>
+    <div>
+        <a href="{{ url_for('transcription.history') }}" class="btn btn-secondary">返回轉寫歷史</a>
+    </div>
+</div>
+
+<div class="result-container">
+    <!-- 左側：原始音訊資訊與對齊標記 -->
+    <div class="panel">
+        <h2 style="margin-bottom: 1.25rem; font-weight: 600;">📊 轉寫資訊與標記對齊</h2>
+        
+        <div class="meta-box">
+            <div style="margin-bottom: 0.5rem;"><strong>原始檔名：</strong>{{ recording.original_filename }}</div>
+            <div style="margin-bottom: 0.5rem;"><strong>辨識語言：</strong>{{ recording.language or '未識別' }}</div>
+            <div style="margin-bottom: 0.5rem;"><strong>音訊長度：</strong>{{ "%.2f"|format(recording.duration) if recording.duration else '0.00' }} 秒</div>
+            <div><strong>轉寫時間：</strong>{{ recording.created_at }}</div>
+        </div>
+
+        <h3 style="margin-bottom: 1rem; font-weight: 600; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">🔗 對齊的標記清單</h3>
+        
+        <div class="aligned-markers-list">
+            {% for marker in markers %}
+                {% set seg = segment_map.get(marker.segment_id) %}
+                <div class="aligned-marker-item">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                        <span style="font-weight: 700; color: var(--primary);">📍 標記時間: {{ "%.2f"|format(marker.marker_time) }} 秒</span>
+                        <span class="category-badge" style="background: rgba(244, 63, 94, 0.15); color: var(--primary);">{{ marker.label or '重點' }}</span>
+                    </div>
+                    {% if seg %}
+                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.4rem; font-style: italic;">
+                            對齊段落 ({{ "%.2f"|format(seg.start_time) }}s - {{ "%.2f"|format(seg.end_time) }}s)：
+                        </div>
+                        <div style="font-size: 0.9rem; color: var(--text-primary); line-height: 1.5; font-weight: 500;">
+                            「{{ seg.text }}」
+                        </div>
+                    {% else %}
+                        <div style="font-size: 0.9rem; color: var(--text-secondary); font-style: italic;">
+                            此標記點周圍沒有重疊或足夠接近的說話段落。
+                        </div>
+                    {% endif %}
+                </div>
+            {% else %}
+                <div class="empty-state" style="padding: 2rem 1rem;">
+                    <span style="font-size: 2rem;">📍</span>
+                    <p style="margin-bottom: 0;">此辨識任務無任何對齊標記。</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- 右側：完整轉寫文本與段落 -->
+    <div class="panel">
+        <h2 style="margin-bottom: 1.25rem; font-weight: 600;">📜 轉寫段落列表</h2>
+        
+        <!-- 完整文本區 -->
+        <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; max-height: 200px; overflow-y: auto;">
+            <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase;">全文大綱</h4>
+            <p style="font-size: 0.95rem; line-height: 1.6; color: var(--text-primary); white-space: pre-line;">{{ recording.full_text }}</p>
+        </div>
+
+        <!-- 逐段時間軸 -->
+        <h3 style="margin-bottom: 1rem; font-weight: 600;">⏱ 逐段時間軸</h3>
+        <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 10px; background: rgba(0,0,0,0.15);">
+            {% for seg in segments %}
+                <div class="segment-item">
+                    <span class="segment-time">
+                        [{{ "%.2f"|format(seg.start_time) }} - {{ "%.2f"|format(seg.end_time) }}]
+                    </span>
+                    <p style="font-size: 0.95rem; line-height: 1.5; color: var(--text-primary);">{{ seg.text }}</p>
+                </div>
+            {% else %}
+                <div class="empty-state" style="padding: 2rem 1rem; border: none;">
+                    <p style="margin-bottom: 0;">無說話段落數據。</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

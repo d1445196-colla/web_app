@@ -2,6 +2,9 @@
 # 系統設定檔
 
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Config:
     # Flask Session Secret Key
@@ -18,3 +21,6 @@ class Config:
     
     # 限制上傳最大容量 (100MB)
     MAX_CONTENT_LENGTH = 100 * 1024 * 1024
+
+    # 【轉寫系統】OpenAI API 金鑰
+    OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}轉寫歷史紀錄{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h1>📜 語音辨識歷史紀錄</h1>
+    <a href="{{ url_for('upload.upload_page') }}" class="btn btn-primary">➕ 上傳新音訊</a>
+</div>
+
+<div style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);">
+    {% if recordings %}
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; vertical-align: middle;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.9rem;">
+                        <th style="padding: 1rem 0.75rem;">原始檔名</th>
+                        <th style="padding: 1rem 0.75rem;">處理狀態</th>
+                        <th style="padding: 1rem 0.75rem;">時長</th>
+                        <th style="padding: 1rem 0.75rem;">建立時間</th>
+                        <th style="padding: 1rem 0.75rem; text-align: right;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in recordings %}
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding: 1rem 0.75rem; font-weight: 600; max-width: 300px; word-break: break-all;">
+                                {{ rec.original_filename }}
+                            </td>
+                            <td style="padding: 1rem 0.75rem;">
+                                {% if rec.status == 'completed' %}
+                                    <span class="category-badge" style="background-color: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3);">辨識完成</span>
+                                {% elif rec.status == 'processing' %}
+                                    <span class="category-badge" style="background-color: rgba(59, 130, 246, 0.15); color: var(--secondary); border: 1px solid rgba(59, 130, 246, 0.3);">處理中...</span>
+                                {% elif rec.status == 'failed' %}
+                                    <span class="category-badge" style="background-color: rgba(244, 63, 94, 0.15); color: var(--primary); border: 1px solid rgba(244, 63, 94, 0.3);">辨識失敗</span>
+                                {% else %}
+                                    <span class="category-badge" style="background-color: rgba(255, 255, 255, 0.05); color: var(--text-secondary); border: 1px solid var(--border-color);">排隊中</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 1rem 0.75rem; font-family: monospace;">
+                                {% if rec.duration %}
+                                    {{ "%.2f"|format(rec.duration) }} 秒
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td style="padding: 1rem 0.75rem; color: var(--text-secondary); font-size: 0.9rem;">
+                                {{ rec.created_at }}
+                            </td>
+                            <td style="padding: 1rem 0.75rem; text-align: right;">
+                                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                                    {% if rec.status == 'completed' %}
+                                        <a href="{{ url_for('transcription.show_result', id=rec.id) }}" class="btn btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">查看結果</a>
+                                    {% else %}
+                                        <button class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;" disabled>無法檢視</button>
+                                    {% endif %}
+                                    <form action="{{ url_for('transcription.delete', id=rec.id) }}" method="POST" onsubmit="return confirm('確定要刪除此轉寫歷史紀錄嗎？這會一併刪除上傳的音訊檔案。');" style="display: inline;">
+                                        <button type="submit" class="btn btn-danger" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">刪除</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <span style="font-size: 3rem; margin-bottom: 1rem;">📭</span>
+            <h3>無任何轉寫紀錄</h3>
+            <p>目前尚無上傳檔案進行語音辨識。請點選下方按鈕，上傳您的第一個音訊檔！</p>
+            <a href="{{ url_for('upload.upload_page') }}" class="btn btn-primary">前往上傳頁面</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

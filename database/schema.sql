@@ -68,3 +68,55 @@ INSERT INTO marker_types (name, color, icon, is_default, sort_order) VALUES
     ('不清晰',   '#f39c12', '❓', 1, 3),
     ('行動項目', '#2ecc71', '⚡', 1, 4),
     ('靈感',     '#9b59b6', '💡', 1, 5);
+
+-- ============================================
+-- 【轉寫系統】5. transcriptions（轉寫紀錄）
+-- ============================================
+CREATE TABLE IF NOT EXISTS transcriptions (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    original_filename TEXT    NOT NULL,
+    stored_filename   TEXT    NOT NULL,
+    file_path         TEXT    NOT NULL,
+    file_size         INTEGER NOT NULL,
+    mime_type         TEXT    NOT NULL,
+    duration          REAL    DEFAULT NULL,
+    full_text         TEXT    DEFAULT NULL,
+    status            TEXT    NOT NULL DEFAULT 'pending',
+    error_message     TEXT    DEFAULT NULL,
+    language          TEXT    DEFAULT NULL,
+    created_at        TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+    completed_at      TEXT    DEFAULT NULL
+);
+
+-- ============================================
+-- 【轉寫系統】6. transcription_segments（轉寫段落）
+-- ============================================
+CREATE TABLE IF NOT EXISTS transcription_segments (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    transcription_id  INTEGER NOT NULL,
+    segment_index     INTEGER NOT NULL,
+    start_time        REAL    NOT NULL,
+    end_time          REAL    NOT NULL,
+    text              TEXT    NOT NULL,
+
+    FOREIGN KEY (transcription_id) REFERENCES transcriptions(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_tseg_transcription_id ON transcription_segments(transcription_id);
+
+-- ============================================
+-- 【轉寫系統】7. transcription_markers（轉寫標記）
+-- ============================================
+CREATE TABLE IF NOT EXISTS transcription_markers (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    transcription_id  INTEGER NOT NULL,
+    segment_id        INTEGER DEFAULT NULL,
+    marker_time       REAL    NOT NULL,
+    label             TEXT    DEFAULT '',
+    created_at        TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+
+    FOREIGN KEY (transcription_id) REFERENCES transcriptions(id) ON DELETE CASCADE,
+    FOREIGN KEY (segment_id)       REFERENCES transcription_segments(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tmarker_transcription_id ON transcription_markers(transcription_id);

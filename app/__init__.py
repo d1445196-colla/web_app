@@ -40,6 +40,13 @@ def create_app(config_class=Config):
     app.register_blueprint(api_bp)
     app.register_blueprint(stats_bp)
 
+    # 【轉寫系統】
+    from app.routes.upload import upload_bp
+    from app.routes.transcription import transcription_bp
+
+    app.register_blueprint(upload_bp)
+    app.register_blueprint(transcription_bp)
+
     # 關閉資料庫連線
     @app.teardown_appcontext
     def close_db(error):
