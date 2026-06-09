@@ -1,3 +1,145 @@
-<!-- app/templates/transactions/list.html — 交易紀錄列表（待實作） -->
-<!-- 繼承：base.html -->
-<!-- 內容：交易紀錄表格，含編輯/刪除按鈕 -->
+{% extends "base.html" %}
+
+{% block title %}個人記帳簿 - 交易紀錄{% endblock %}
+
+{% block extra_head %}
+<style>
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .summary-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        padding: 1.5rem;
+        backdrop-filter: blur(var(--glass-blur));
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    
+    .summary-title {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 0.5rem;
+    }
+    
+    .summary-amount {
+        font-family: 'Outfit', sans-serif;
+        font-size: 2.2rem;
+        font-weight: 700;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 計算總收支 -->
+{% set total_income = namespace(value=0.0) %}
+{% set total_expense = namespace(value=0.0) %}
+{% for tx in transactions %}
+    {% if tx.type == 'income' %}
+        {% set total_income.value = total_income.value + tx.amount %}
+    {% else %}
+        {% set total_expense.value = total_expense.value + tx.amount %}
+    {% endif %}
+{% endfor %}
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+        <h1 style="margin-bottom: 0.5rem; font-family: 'Outfit', sans-serif;">💰 個人記帳簿</h1>
+        <p style="color: var(--text-secondary);">記錄每日收支，管理財務健康。</p>
+    </div>
+    <div style="display: flex; gap: 0.8rem;">
+        <a href="{{ url_for('template.list_templates') }}" class="btn btn-secondary">⚡ 常用模板一鍵記帳</a>
+        <a href="{{ url_for('transaction.create_transaction') }}" class="btn btn-primary">➕ 新增交易紀錄</a>
+    </div>
+</div>
+
+<!-- 收支卡片總覽 -->
+<div class="summary-grid">
+    <div class="summary-card" style="border-left: 4px solid var(--success);">
+        <span class="summary-title">總收入 (此列表)</span>
+        <span class="summary-amount" style="color: var(--success);">${{ "{:,.2f}".format(total_income.value) }}</span>
+    </div>
+    
+    <div class="summary-card" style="border-left: 4px solid var(--primary);">
+        <span class="summary-title">總支出 (此列表)</span>
+        <span class="summary-amount" style="color: var(--primary);">${{ "{:,.2f}".format(total_expense.value) }}</span>
+    </div>
+    
+    <div class="summary-card" style="border-left: 4px solid {% if balance >= 0 %}var(--secondary){% else %}var(--primary){% endif %};">
+        <span class="summary-title">淨帳戶餘額</span>
+        <span class="summary-amount" style="color: {% if balance >= 0 %}var(--secondary){% else %}var(--primary){% endif %};">
+            ${{ "{:,.2f}".format(balance) }}
+        </span>
+    </div>
+</div>
+
+<!-- 交易明細表格 -->
+<div style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 16px; padding: 2rem; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);">
+    <h2 style="margin-bottom: 1.5rem; font-weight: 600;">📝 交易紀錄明細</h2>
+    
+    {% if transactions %}
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; vertical-align: middle;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.9rem;">
+                        <th style="padding: 1rem 0.75rem;">日期</th>
+                        <th style="padding: 1rem 0.75rem;">類型</th>
+                        <th style="padding: 1rem 0.75rem;">金額</th>
+                        <th style="padding: 1rem 0.75rem;">分類</th>
+                        <th style="padding: 1rem 0.75rem;">備註</th>
+                        <th style="padding: 1rem 0.75rem; text-align: right;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tx in transactions %}
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding: 1rem 0.75rem; font-family: monospace;">{{ tx.date }}</td>
+                            <td style="padding: 1rem 0.75rem;">
+                                {% if tx.type == 'income' %}
+                                    <span class="category-badge" style="background-color: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3);">收入</span>
+                                {% else %}
+                                    <span class="category-badge" style="background-color: rgba(244, 63, 94, 0.15); color: var(--primary); border: 1px solid rgba(244, 63, 94, 0.3);">支出</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 1rem 0.75rem; font-family: 'Outfit', sans-serif; font-weight: 700; color: {% if tx.type == 'income' %}var(--success){% else %}var(--text-primary){% endif %};">
+                                {% if tx.type == 'income' %}+{% else %}-{% endif %}${{ "{:,.2f}".format(tx.amount) }}
+                            </td>
+                            <td style="padding: 1rem 0.75rem;">
+                                <span class="category-badge" style="background: rgba(59, 130, 246, 0.08); color: var(--text-primary); border: 1px solid var(--border-color);">
+                                    {{ tx.category_name or '未分類' }}
+                                </span>
+                            </td>
+                            <td style="padding: 1rem 0.75rem; color: var(--text-secondary); max-width: 250px; word-break: break-all;">
+                                {{ tx.note or '--' }}
+                            </td>
+                            <td style="padding: 1rem 0.75rem; text-align: right;">
+                                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                                    <a href="{{ url_for('transaction.edit_transaction', id=tx.id) }}" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">編輯</a>
+                                    <form action="{{ url_for('transaction.delete_transaction', id=tx.id) }}" method="POST" onsubmit="return confirm('確定要刪除此筆交易明細嗎？');" style="display: inline;">
+                                        <button type="submit" class="btn btn-danger" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">刪除</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <span style="font-size: 3rem; margin-bottom: 1rem;">💸</span>
+            <h3>無任何交易明細</h3>
+            <p>目前尚無任何收入或支出。開始記錄您的第一筆收支吧！</p>
+            <a href="{{ url_for('transaction.create_transaction') }}" class="btn btn-primary">手動新增紀錄</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

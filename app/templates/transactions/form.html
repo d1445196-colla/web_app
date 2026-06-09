@@ -1,3 +1,173 @@
-<!-- app/templates/transactions/form.html — 新增/編輯交易表單（待實作） -->
-<!-- 繼承：base.html -->
-<!-- 內容：交易表單（類型、金額、分類、日期、備註），新增與編輯共用 -->
+{% extends "base.html" %}
+
+{% block title %}
+    {% if transaction %}編輯交易紀錄 - {{ transaction.category_name }}{% else %}新增交易紀錄{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .form-container {
+        max-width: 550px;
+        margin: 0 auto;
+        background: var(--bg-panel);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 2.5rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+    
+    .radio-group {
+        display: flex;
+        gap: 1.5rem;
+        margin-top: 0.5rem;
+    }
+    
+    .radio-label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        font-weight: 500;
+    }
+    
+    .radio-label input {
+        cursor: pointer;
+        accent-color: var(--primary);
+        width: 18px;
+        height: 18px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <h2 style="margin-bottom: 2rem; font-family: 'Outfit', sans-serif;">
+        {% if transaction %}✏ 編輯交易紀錄{% else %}💵 新增交易紀錄{% endif %}
+    </h2>
+    
+    <form action="{% if transaction %}{{ url_for('transaction.edit_transaction', id=transaction.id) }}{% else %}{{ url_for('transaction.create_transaction') }}{% endif %}" method="POST">
+        <!-- 交易類型 -->
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label>交易類型</label>
+            <div class="radio-group">
+                <label class="radio-label">
+                    <input type="radio" name="type" value="expense" 
+                           {% if not transaction or transaction.type == 'expense' %}checked{% endif %}>
+                    支出 📉
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="type" value="income" 
+                           {% if transaction and transaction.type == 'income' %}checked{% endif %}>
+                    收入 📈
+                </label>
+            </div>
+        </div>
+
+        <!-- 金額 -->
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label for="amount">金額</label>
+            <input type="number" class="form-control" id="amount" name="amount" min="1" step="any" required 
+                   placeholder="請輸入金額" value="{{ transaction.amount if transaction else '' }}">
+        </div>
+
+        <!-- 分類 -->
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label for="category_id">分類</label>
+            <select class="form-control" id="category_id" name="category_id" required>
+                <option value="" disabled selected>-- 請選擇分類 --</option>
+                {% for cat in categories %}
+                    <option value="{{ cat.id }}" data-type="{{ cat.type }}"
+                            {% if transaction and transaction.category_id == cat.id %}selected{% endif %}>
+                        {{ cat.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- 交易日期 -->
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label for="date">交易日期</label>
+            <input type="date" class="form-control" id="date" name="date" required 
+                   value="{{ transaction.date if transaction else '' }}">
+        </div>
+
+        <!-- 備註 -->
+        <div class="form-group" style="margin-bottom: 2rem;">
+            <label for="note">備註 (選填)</label>
+            <textarea class="form-control" id="note" name="note" rows="3" placeholder="輸入交易備註或細節..." style="resize: vertical;">{{ transaction.note if transaction else '' }}</textarea>
+        </div>
+
+        <!-- 按鈕 -->
+        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+            <a href="{{ url_for('transaction.list_transactions') }}" class="btn btn-secondary">取消</a>
+            <button type="submit" class="btn btn-primary">儲存交易紀錄</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const typeRadios = document.getElementsByName('type');
+        const categorySelect = document.getElementById('category_id');
+        const dateInput = document.getElementById('date');
+        
+        // 1. 若為新增狀態，預設日期為今天
+        if (!dateInput.value) {
+            const today = new Date().toISOString().split('T')[0];
+            dateInput.value = today;
+        }
+
+        // 保存所有原始選項
+        const originalOptions = Array.from(categorySelect.options);
+
+        // 2. 根據所選類型（收入/支出）動態過濾分類選項
+        function filterCategories() {
+            // 取得當前選取的類型
+            let selectedType = 'expense';
+            for (const radio of typeRadios) {
+                if (radio.checked) {
+                    selectedType = radio.value;
+                    break;
+                }
+            }
+
+            // 先記住當前選取的 category id
+            const currentSelectedValue = categorySelect.value;
+            
+            // 清空下拉清單
+            categorySelect.innerHTML = '';
+            
+            // 重新填入符合資料類型的選項
+            let hasMatch = false;
+            
+            // 第一個預設提示選項
+            categorySelect.appendChild(originalOptions[0]);
+            
+            for (let i = 1; i < originalOptions.length; i++) {
+                const opt = originalOptions[i];
+                if (opt.getAttribute('data-type') === selectedType) {
+                    categorySelect.appendChild(opt);
+                    if (opt.value === currentSelectedValue) {
+                        opt.selected = true;
+                        hasMatch = true;
+                    }
+                }
+            }
+
+            if (!hasMatch) {
+                originalOptions[0].selected = true;
+            }
+        }
+
+        // 監聽單選按鈕變更事件
+        for (const radio of typeRadios) {
+            radio.addEventListener('change', filterCategories);
+        }
+
+        // 初始化過濾一次
+        filterCategories();
+    });
+</script>
+{% endblock %}

@@ -1,5 +1,5 @@
 # app/__init__.py
-# Flask 應用程式工廠
+# Flask 應用程式工廠 — 整合錄音系統與語音轉寫系統
 
 import os
 from flask import Flask
@@ -20,7 +20,13 @@ def create_app(config_class=Config):
     from app.routes.marker import marker_bp
     from app.routes.api import api_bp
     from app.routes.stats import stats_bp
-    
+
+    app.register_blueprint(main_bp)
+    app.register_blueprint(recording_bp)
+    app.register_blueprint(marker_bp)
+    app.register_blueprint(api_bp)
+    app.register_blueprint(stats_bp)
+
     # 繳費提醒與記帳相關（如果有的話，一併註冊）
     try:
         from app.routes.reminder import reminder_bp
@@ -34,11 +40,18 @@ def create_app(config_class=Config):
     except ImportError:
         pass
 
-    app.register_blueprint(main_bp)
-    app.register_blueprint(recording_bp)
-    app.register_blueprint(marker_bp)
-    app.register_blueprint(api_bp)
-    app.register_blueprint(stats_bp)
+    try:
+        from app.routes.template import template_bp
+        app.register_blueprint(template_bp)
+    except ImportError:
+        pass
+
+    # 【轉寫系統】
+    from app.routes.upload import upload_bp
+    from app.routes.transcription import transcription_bp
+
+    app.register_blueprint(upload_bp)
+    app.register_blueprint(transcription_bp)
 
     # 關閉資料庫連線
     @app.teardown_appcontext

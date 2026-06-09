@@ -15,6 +15,14 @@
             <li><a href="{{ url_for('main.index') }}">錄音</a></li>
             <li><a href="{{ url_for('recording.list_recordings') }}">錄音列表</a></li>
             <li><a href="{{ url_for('marker.list_marker_types') }}">標記種類設定</a></li>
+            <li><a href="{{ url_for('upload.upload_page') }}">語音轉寫</a></li>
+            <li><a href="{{ url_for('transcription.history') }}">轉寫紀錄</a></li>
+            <li style="border-left: 1px solid var(--border-color); padding-left: 1rem; margin-left: 0.5rem;">
+                <a href="{{ url_for('transaction.list_transactions') }}">記帳簿</a>
+            </li>
+            <li><a href="{{ url_for('reminder.list_reminders') }}">繳費提醒</a></li>
+            <li><a href="{{ url_for('template.list_templates') }}">常用模板</a></li>
+            <li><a href="{{ url_for('stats.index') }}">財務統計</a></li>
         </ul>
     </nav>
 

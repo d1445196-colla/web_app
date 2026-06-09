@@ -1,7 +1,10 @@
 # config.py
-# 系統設定檔
+# 系統設定檔 — 整合錄音系統與語音轉寫系統
 
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Config:
     # Flask Session Secret Key
@@ -18,3 +21,6 @@ class Config:
     
     # 限制上傳最大容量 (100MB)
     MAX_CONTENT_LENGTH = 100 * 1024 * 1024
+
+    # OpenAI API Key (轉寫系統使用)
+    OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
